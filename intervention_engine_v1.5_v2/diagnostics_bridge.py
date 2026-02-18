@@ -24,7 +24,7 @@ def _load_module_from_path(module_name: str, path: Path):
 
 def _load_v15_modules() -> Dict[str, object]:
     root = Path(__file__).resolve().parents[1]
-    v15 = root / "v1.5 t"
+    v15 = root / "v1.5"
 
     return {
         "predictor": _load_module_from_path("v2_bridge_v15_predictor", v15 / "predictor.py"),
