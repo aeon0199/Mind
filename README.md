@@ -1,35 +1,45 @@
-# LLM Stability Runtime Stack
+# observer
 
-Inference-time control research for LLMs: measure when generation destabilizes, apply targeted interventions, and quantify recovery.
+Closed-loop stability control for language model inference.
 
-## Why This Exists
+Most interpretability tools show you what's inside a model. Observer is built around a different question: **can you measure when generation is destabilizing — and correct it in real time?**
 
-Most intervention demos show that outputs change. This stack is built to answer harder research questions:
+This is not another activation visualization toolkit. It's a runtime control stack.
 
-- When does a model diverge from its expected trajectory?
-- How long does perturbation memory persist?
-- Which interventions recover behavior fastest?
-- Can closed-loop control damp instability in real time?
+---
 
-## What Makes This Different
+## What This Does
 
-- Deterministic branchpoint experiments via `SeedCache` (baseline vs intervention from identical prompt-pass state)
-- Explicit hysteresis protocol (`BASE -> PERTURB -> REASK`) to test persistence, not just immediate drift
-- Unified adaptive controller with token-level diagnostics and intervention decisions
-- Optional SAE steering and NNsight backend support for advanced intervention workflows
+Observer instruments autoregressive generation at the token level, runs a streaming divergence predictor against the model's hidden trajectory, and closes the loop with a proportional controller that can apply targeted interventions — all during a single forward pass.
 
-## Runtime Components
+Four protocol layers, each independently usable:
 
-- `baseline_hysteresis_v1/`
-  - Protocol layer for persistence/hysteresis experiments.
-- `v1.5/`
-  - Standalone observability runner with streaming diagnostics and plotting.
-- `intervention_engine_v1.5_v2/`
-  - Deterministic baseline-vs-intervention runner with recovery metrics.
-- `adaptive_controller_system4/`
-  - Closed-loop controller (`observe`, `stress`, `control`) with per-token event logs.
+- **Hysteresis protocol** — `BASE → PERTURB → REASK`: does perturbation memory persist after the perturbation is removed? Answers the question that jailbreak and context-drift research rarely asks directly.
+- **Observability runner** — single-pass token-level telemetry: divergence, spectral diagnostics, layer stiffness, windowed SVD. No branching, no intervention. Just signal.
+- **Intervention engine** — deterministic baseline-vs-intervention comparison via `SeedCache`: both branches run from an identical prompt-pass snapshot. Eliminates RNG and attention-mask confounds that most published intervention papers don't control for.
+- **Adaptive controller** — closed-loop. Divergence signal drives proportional damping in real time. Shadow mode for calibration before active deployment.
 
-## 2-Minute Quickstart
+---
+
+## The Divergence Signal
+
+The core signal is not a distance metric. It's a **held-out one-step prediction error** from a VAR(1) model fit on a sliding window of projected hidden states.
+
+At each token: project hidden state to 64 dimensions via a deterministic Rademacher matrix, fit VAR(1) dynamics on the recent window (excluding the newest state), predict the newest state from the previous one, measure how wrong that prediction is. When generation is stable, the hidden trajectory is locally predictable. When it isn't, this signal spikes before the output reflects it.
+
+The composite score driving the controller: 70% prediction error, 15% spectral entropy, 10% high-frequency activation fraction, 5% SVD rank delta.
+
+---
+
+## SeedCache: Deterministic Branchpointing
+
+The intervention engine runs the prompt exactly once, snapshots `past_key_values` + final-token logits + hidden state at the target layer, then `.clone()`s that state for both the baseline and intervention branches. Both branches forward from identical model state.
+
+This is the thing that makes intervention comparisons actually mean something. Without it, you're measuring noise.
+
+---
+
+## Quickstart
 
 ```bash
 python -m venv .venv
@@ -37,20 +47,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Run one command from each runtime:
-
 ```bash
-# 1) Hysteresis baseline protocol
+# 1) Hysteresis protocol
 python baseline_hysteresis_v1/runner.py observer \
   --prompt "Explain how airplanes fly." \
   --max-new-tokens 128
 
-# 2) Standalone V1.5 observability run
+# 2) Observability run with streaming diagnostics
 python v1.5/V1.5_runner.py \
   --prompt "Explain how airplanes fly." \
   --max_new_tokens 128
 
-# 3) Deterministic intervention stress run
+# 3) Deterministic intervention stress test
 python intervention_engine_v1.5_v2/intervention.py run \
   --prompt "Explain how airplanes fly." \
   --max-tokens 64 \
@@ -60,22 +68,22 @@ python intervention_engine_v1.5_v2/intervention.py run \
   --start 5 \
   --duration 10
 
-# 4) Adaptive closed-loop control (shadow mode)
+# 4) Closed-loop adaptive control (shadow mode)
 python adaptive_controller_system4/adaptive_runner.py control \
   --prompt "Explain how airplanes fly." \
   --shadow
 ```
 
-## Advanced Modes (Optional)
+---
 
-Install optional packages:
+## Advanced Modes
 
 ```bash
 pip install -r requirements-optional.txt
 ```
 
 ```bash
-# Intervention engine with NNsight backend
+# NNsight backend (remote execution support)
 python intervention_engine_v1.5_v2/intervention.py run \
   --backend nnsight \
   --nnsight-remote \
@@ -84,7 +92,7 @@ python intervention_engine_v1.5_v2/intervention.py run \
   --type scaling \
   --magnitude 0.9
 
-# Intervention engine with SAE steering
+# SAE feature steering
 python intervention_engine_v1.5_v2/intervention.py run \
   --prompt "Explain how airplanes fly." \
   --type sae \
@@ -93,7 +101,7 @@ python intervention_engine_v1.5_v2/intervention.py run \
   --sae-feature-idx 42 \
   --sae-strength 5.0
 
-# Adaptive controller with SAE + dashboard
+# Adaptive controller with SAE + live dashboard
 python adaptive_controller_system4/adaptive_loop.py \
   --prompt "Explain how airplanes fly." \
   --type sae \
@@ -102,46 +110,79 @@ python adaptive_controller_system4/adaptive_loop.py \
   --sae-strength 5.0
 ```
 
-## What Data You Get
+---
 
-This stack is designed to produce reusable research artifacts, not just text outputs.
+## Research Artifacts
 
-- `intervention_engine_v1.5_v2` runs:
-  - deterministic config hash + seed cache fingerprint
-  - baseline/intervention trajectories
-  - recovery and divergence metrics
-- `v1.5` runs:
-  - token-by-token telemetry with divergence/spectral/stiffness diagnostics
-  - optional generated plot artifacts via `plotter.py`
-- `adaptive_controller_system4` runs:
-  - token-level `events.jsonl` with diagnostics + control actions
-  - `summary.json` with regime counts and aggregate control stats
-  - optional `dashboard.html`
-- `baseline_hysteresis_v1` runs:
-  - staged frames (`base`, `perturb`, `reask`)
-  - hysteresis/recovery summary metrics
+Every run produces structured, reusable output — not just text.
 
-## Research Use-Cases
+**Intervention engine runs:**
+- Deterministic config hash + seed cache fingerprint
+- Baseline and intervention hidden trajectories
+- Recovery metrics and regime classification (`ELASTIC / PARTIAL / PLASTIC / DIVERGENT`)
 
-- Compare intervention families (`additive`, `projection`, `scaling`, `sae`) under matched branchpoints
-- Evaluate intervention persistence and recovery timing
-- Test controller policies in shadow mode before active deployment
-- Generate publishable per-token traces for stability/control analysis
+**Observability runs:**
+- Token-by-token telemetry: divergence, spectral metrics, layer stiffness, SVD signature
+- Plot artifacts: timeline vitals, SVD over tokens, entropy vs divergence phase space, headline scorecard
+
+**Adaptive controller runs:**
+- Per-token `events.jsonl` with diagnostics and control decisions
+- `summary.json` with regime counts and aggregate control stats
+- Optional `dashboard.html`
+
+**Hysteresis runs:**
+- Staged frames (`base`, `perturb`, `reask`)
+- Hysteresis and recovery summary metrics
+- Distribution-shift (JS divergence) comparisons across context stages
+
+---
+
+## Intervention Types
+
+`additive` · `projection` · `scaling` · `sae`
+
+All run from deterministic SeedCache branchpoints. Results are directly comparable across intervention families.
+
+---
+
+## What This Is Not
+
+This is a research instrument, not a production safety layer. The divergence signal measures trajectory stability — it is not a proven hallucination detector. The controller is proportional, not PID. Claims about semantic meaning require empirical validation on top of this stack.
+
+---
 
 ## Reproducibility
 
-- Deterministic branchpointing before baseline/intervention split
-- Config hashing and run metadata in artifacts
-- Release/reporting checklist in `REPRODUCIBILITY.md`
+- Deterministic branchpointing before every baseline/intervention split
+- Config hashing and seed cache fingerprints in all run artifacts
+- Reporting checklist in `REPRODUCIBILITY.md`
+
+---
 
 ## Project Layout
 
-- `intervention_engine_v1.5_v2/intervention.py`: main intervention runner
-- `v1.5/V1.5_runner.py`: standalone observability runner
-- `adaptive_controller_system4/adaptive_runner.py`: unified entrypoint (`observe`, `stress`, `control`)
-- `adaptive_controller_system4/adaptive_loop.py`: adaptive control runtime
-- `.github/workflows/ci.yml`: compile/smoke checks
+```
+baseline_hysteresis_v1/      hysteresis protocol
+v1.5/                        observability runner + diagnostics
+intervention_engine_v1.5_v2/ deterministic intervention engine
+adaptive_controller_system4/ closed-loop adaptive controller
+```
+
+---
 
 ## Citation
 
-If this project helps your research, cite via `CITATION.cff`.
+```bibtex
+@software{malone2026observer,
+  author = {Malone, Josh},
+  title  = {observer: Closed-loop stability control for language model inference},
+  year   = {2026},
+  url    = {https://github.com/aeon0199/llm-stability-runtime}
+}
+```
+
+Or cite via `CITATION.cff`.
+
+---
+
+MIT License
