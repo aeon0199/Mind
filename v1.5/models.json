@@ -9,6 +9,13 @@
       "temperature": 0.0,
       "top_p": 1.0
     },
+    "qwen3.5-9b-instruct": {
+      "label": "Qwen 3.5 9B Instruct",
+      "hf_id": "Qwen/Qwen3.5-9B-Instruct",
+      "max_new_tokens": 128,
+      "temperature": 0.0,
+      "top_p": 1.0
+    },
 
     "qwen3-8b": {
       "label": "Qwen 3 8B",
