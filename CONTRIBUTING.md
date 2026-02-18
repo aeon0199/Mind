@@ -27,11 +27,11 @@ pip install -r requirements-optional.txt
 ## Quick Checks
 
 ```bash
-python -m py_compile baseline_hysteresis/runner.py
-python -m py_compile intervention_engine/intervention.py
-python -m py_compile intervention_engine/backend.py
-python -m py_compile intervention_engine/sae_adapter.py
-python -m py_compile adaptive_controller/adaptive_loop.py
-python -m py_compile adaptive_controller/adaptive_runner.py
-python -m py_compile adaptive_controller/dashboard.py
+python -m py_compile baseline_hysteresis_v1/runner.py
+python -m py_compile intervention_engine_v1.5_v2/intervention.py
+python -m py_compile intervention_engine_v1.5_v2/backend.py
+python -m py_compile intervention_engine_v1.5_v2/sae_adapter.py
+python -m py_compile adaptive_controller_system4/adaptive_loop.py
+python -m py_compile adaptive_controller_system4/adaptive_runner.py
+python -m py_compile adaptive_controller_system4/dashboard.py
 ```

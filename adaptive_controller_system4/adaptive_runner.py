@@ -24,11 +24,11 @@ def _load_module_from_path(module_name: str, path: Path) -> Any:
 
 
 def _load_v2_module(root: Path):
-    return _load_module_from_path("adaptive_v2_intervention", root / "intervention_engine" / "intervention.py")
+    return _load_module_from_path("adaptive_v2_intervention", root / "intervention_engine_v1.5_v2" / "intervention.py")
 
 
 def _load_control_module(root: Path):
-    return _load_module_from_path("adaptive_control_loop", root / "adaptive_controller" / "adaptive_loop.py")
+    return _load_module_from_path("adaptive_control_loop", root / "adaptive_controller_system4" / "adaptive_loop.py")
 
 
 def run_observe(args, root: Path):
@@ -84,7 +84,7 @@ def run_control(args, root: Path):
     if control_type not in ("scaling", "sae"):
         raise ValueError("Control mode only supports --type scaling or --type sae.")
     ctl = _load_control_module(root)
-    text, artifacts = ctl.run_adaptive_controller(
+    text, artifacts = ctl.run_adaptive_controller_system4(
         prompt=args.prompt,
         model_key=args.model,
         max_new_tokens=args.max_tokens,

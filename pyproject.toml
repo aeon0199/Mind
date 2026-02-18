@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "llm-stability-runtime"
 version = "0.1.0"
-description = "Inference-time stability experiments for LLMs (baseline_hysteresis/intervention_engine/adaptive_controller)."
+description = "Inference-time stability experiments for LLMs (baseline_hysteresis_v1/intervention_engine_v1.5_v2/adaptive_controller_system4)."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

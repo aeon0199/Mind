@@ -20,11 +20,11 @@ Most intervention demos show that outputs change. This stack is built to answer 
 
 ## Runtime Components
 
-- `baseline_hysteresis/`
+- `baseline_hysteresis_v1/`
   - Protocol layer for persistence/hysteresis experiments.
-- `intervention_engine/`
+- `intervention_engine_v1.5_v2/`
   - Deterministic baseline-vs-intervention runner with recovery metrics.
-- `adaptive_controller/`
+- `adaptive_controller_system4/`
   - Closed-loop controller (`observe`, `stress`, `control`) with per-token event logs.
 
 ## 2-Minute Quickstart
@@ -39,12 +39,12 @@ Run one command from each runtime:
 
 ```bash
 # 1) Hysteresis baseline protocol
-python baseline_hysteresis/runner.py observer \
+python baseline_hysteresis_v1/runner.py observer \
   --prompt "Explain how airplanes fly." \
   --max-new-tokens 128
 
 # 2) Deterministic intervention stress run
-python intervention_engine/intervention.py run \
+python intervention_engine_v1.5_v2/intervention.py run \
   --prompt "Explain how airplanes fly." \
   --max-tokens 64 \
   --layer -1 \
@@ -54,7 +54,7 @@ python intervention_engine/intervention.py run \
   --duration 10
 
 # 3) Adaptive closed-loop control (shadow mode)
-python adaptive_controller/adaptive_runner.py control \
+python adaptive_controller_system4/adaptive_runner.py control \
   --prompt "Explain how airplanes fly." \
   --shadow
 ```
@@ -69,7 +69,7 @@ pip install -r requirements-optional.txt
 
 ```bash
 # Intervention engine with NNsight backend
-python intervention_engine/intervention.py run \
+python intervention_engine_v1.5_v2/intervention.py run \
   --backend nnsight \
   --nnsight-remote \
   --prompt "Explain how airplanes fly." \
@@ -78,7 +78,7 @@ python intervention_engine/intervention.py run \
   --magnitude 0.9
 
 # Intervention engine with SAE steering
-python intervention_engine/intervention.py run \
+python intervention_engine_v1.5_v2/intervention.py run \
   --prompt "Explain how airplanes fly." \
   --type sae \
   --layer -1 \
@@ -87,7 +87,7 @@ python intervention_engine/intervention.py run \
   --sae-strength 5.0
 
 # Adaptive controller with SAE + dashboard
-python adaptive_controller/adaptive_loop.py \
+python adaptive_controller_system4/adaptive_loop.py \
   --prompt "Explain how airplanes fly." \
   --type sae \
   --sae-repo "apollo-research/llama-3.1-70b-sae" \
@@ -99,15 +99,15 @@ python adaptive_controller/adaptive_loop.py \
 
 This stack is designed to produce reusable research artifacts, not just text outputs.
 
-- `intervention_engine` runs:
+- `intervention_engine_v1.5_v2` runs:
   - deterministic config hash + seed cache fingerprint
   - baseline/intervention trajectories
   - recovery and divergence metrics
-- `adaptive_controller` runs:
+- `adaptive_controller_system4` runs:
   - token-level `events.jsonl` with diagnostics + control actions
   - `summary.json` with regime counts and aggregate control stats
   - optional `dashboard.html`
-- `baseline_hysteresis` runs:
+- `baseline_hysteresis_v1` runs:
   - staged frames (`base`, `perturb`, `reask`)
   - hysteresis/recovery summary metrics
 
@@ -126,9 +126,9 @@ This stack is designed to produce reusable research artifacts, not just text out
 
 ## Project Layout
 
-- `intervention_engine/intervention.py`: main intervention runner
-- `adaptive_controller/adaptive_runner.py`: unified entrypoint (`observe`, `stress`, `control`)
-- `adaptive_controller/adaptive_loop.py`: adaptive control runtime
+- `intervention_engine_v1.5_v2/intervention.py`: main intervention runner
+- `adaptive_controller_system4/adaptive_runner.py`: unified entrypoint (`observe`, `stress`, `control`)
+- `adaptive_controller_system4/adaptive_loop.py`: adaptive control runtime
 - `.github/workflows/ci.yml`: compile/smoke checks
 
 ## Citation
