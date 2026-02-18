@@ -28,6 +28,7 @@ pip install -r requirements-optional.txt
 
 ```bash
 python -m py_compile baseline_hysteresis_v1/runner.py
+python -m py_compile v1.5/V1.5_runner.py
 python -m py_compile intervention_engine_v1.5_v2/intervention.py
 python -m py_compile intervention_engine_v1.5_v2/backend.py
 python -m py_compile intervention_engine_v1.5_v2/sae_adapter.py

@@ -22,6 +22,8 @@ Most intervention demos show that outputs change. This stack is built to answer 
 
 - `baseline_hysteresis_v1/`
   - Protocol layer for persistence/hysteresis experiments.
+- `v1.5/`
+  - Standalone observability runner with streaming diagnostics and plotting.
 - `intervention_engine_v1.5_v2/`
   - Deterministic baseline-vs-intervention runner with recovery metrics.
 - `adaptive_controller_system4/`
@@ -43,7 +45,12 @@ python baseline_hysteresis_v1/runner.py observer \
   --prompt "Explain how airplanes fly." \
   --max-new-tokens 128
 
-# 2) Deterministic intervention stress run
+# 2) Standalone V1.5 observability run
+python v1.5/V1.5_runner.py \
+  --prompt "Explain how airplanes fly." \
+  --max_new_tokens 128
+
+# 3) Deterministic intervention stress run
 python intervention_engine_v1.5_v2/intervention.py run \
   --prompt "Explain how airplanes fly." \
   --max-tokens 64 \
@@ -53,7 +60,7 @@ python intervention_engine_v1.5_v2/intervention.py run \
   --start 5 \
   --duration 10
 
-# 3) Adaptive closed-loop control (shadow mode)
+# 4) Adaptive closed-loop control (shadow mode)
 python adaptive_controller_system4/adaptive_runner.py control \
   --prompt "Explain how airplanes fly." \
   --shadow
@@ -103,6 +110,9 @@ This stack is designed to produce reusable research artifacts, not just text out
   - deterministic config hash + seed cache fingerprint
   - baseline/intervention trajectories
   - recovery and divergence metrics
+- `v1.5` runs:
+  - token-by-token telemetry with divergence/spectral/stiffness diagnostics
+  - optional generated plot artifacts via `plotter.py`
 - `adaptive_controller_system4` runs:
   - token-level `events.jsonl` with diagnostics + control actions
   - `summary.json` with regime counts and aggregate control stats
@@ -127,6 +137,7 @@ This stack is designed to produce reusable research artifacts, not just text out
 ## Project Layout
 
 - `intervention_engine_v1.5_v2/intervention.py`: main intervention runner
+- `v1.5/V1.5_runner.py`: standalone observability runner
 - `adaptive_controller_system4/adaptive_runner.py`: unified entrypoint (`observe`, `stress`, `control`)
 - `adaptive_controller_system4/adaptive_loop.py`: adaptive control runtime
 - `.github/workflows/ci.yml`: compile/smoke checks
