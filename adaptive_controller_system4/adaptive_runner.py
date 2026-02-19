@@ -90,6 +90,18 @@ def run_control(args, root: Path):
         max_new_tokens=args.max_tokens,
         layer_idx=args.layer,
         ma_window=args.ma_window,
+        control_threshold_warn=args.control_threshold_warn,
+        control_threshold_crit=args.control_threshold_crit,
+        control_scale_warn=args.control_scale_warn,
+        control_scale_crit=args.control_scale_crit,
+        control_hold_warn=args.control_hold_warn,
+        control_hold_crit=args.control_hold_crit,
+        control_weight_div=args.control_weight_div,
+        control_weight_spec_entropy=args.control_weight_spec_entropy,
+        control_weight_high_frac=args.control_weight_high_frac,
+        control_weight_rank_delta=args.control_weight_rank_delta,
+        control_spec_entropy_floor=args.control_spec_entropy_floor,
+        control_high_frac_floor=args.control_high_frac_floor,
         seed=args.seed,
         shadow=args.shadow,
         run_name=args.run_name,
@@ -136,6 +148,18 @@ def main():
 
     # Control mode options
     parser.add_argument("--ma-window", type=int, default=3)
+    parser.add_argument("--control-threshold-warn", type=float, default=0.55)
+    parser.add_argument("--control-threshold-crit", type=float, default=0.85)
+    parser.add_argument("--control-scale-warn", type=float, default=0.90)
+    parser.add_argument("--control-scale-crit", type=float, default=0.75)
+    parser.add_argument("--control-hold-warn", type=int, default=3)
+    parser.add_argument("--control-hold-crit", type=int, default=6)
+    parser.add_argument("--control-weight-div", type=float, default=0.70)
+    parser.add_argument("--control-weight-spec-entropy", type=float, default=0.15)
+    parser.add_argument("--control-weight-high-frac", type=float, default=0.10)
+    parser.add_argument("--control-weight-rank-delta", type=float, default=0.05)
+    parser.add_argument("--control-spec-entropy-floor", type=float, default=0.75)
+    parser.add_argument("--control-high-frac-floor", type=float, default=0.30)
     parser.add_argument("--shadow", action="store_true")
     parser.add_argument("--run-name", default="adaptive_runner")
     parser.add_argument("--no-dashboard", action="store_true")

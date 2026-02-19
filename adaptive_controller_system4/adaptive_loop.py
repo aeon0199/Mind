@@ -67,27 +67,44 @@ class StabilityController:
     secondary indicators of instability.
     """
 
-    def __init__(self, ma_window: int = 3):
+    def __init__(
+        self,
+        ma_window: int = 3,
+        threshold_warn: float = 0.55,
+        threshold_crit: float = 0.85,
+        scale_warn: float = 0.90,
+        scale_crit: float = 0.75,
+        hold_warn: int = 3,
+        hold_crit: int = 6,
+        weight_div: float = 0.70,
+        weight_spec_entropy: float = 0.15,
+        weight_high_frac: float = 0.10,
+        weight_rank_delta: float = 0.05,
+        spec_entropy_floor: float = 0.75,
+        high_frac_floor: float = 0.30,
+    ):
         self.history = deque(maxlen=int(ma_window))
         self.cooldown_counter = 0
         self.active_scale = 1.0
         self._prev_eff_rank: Optional[float] = None
 
         # Thresholds over the smoothed control score.
-        self.TH_WARN = 0.55
-        self.TH_CRIT = 0.85
+        self.TH_WARN = float(threshold_warn)
+        self.TH_CRIT = float(threshold_crit)
 
         # Scales and hold durations.
-        self.SCALE_WARN = 0.90
-        self.SCALE_CRIT = 0.75
-        self.HOLD_WARN = 3
-        self.HOLD_CRIT = 6
+        self.SCALE_WARN = float(scale_warn)
+        self.SCALE_CRIT = float(scale_crit)
+        self.HOLD_WARN = int(hold_warn)
+        self.HOLD_CRIT = int(hold_crit)
 
         # Term weights.
-        self.W_DIV = 0.70
-        self.W_SPEC_ENT = 0.15
-        self.W_HIGH_FRAC = 0.10
-        self.W_RANK_DELTA = 0.05
+        self.W_DIV = float(weight_div)
+        self.W_SPEC_ENT = float(weight_spec_entropy)
+        self.W_HIGH_FRAC = float(weight_high_frac)
+        self.W_RANK_DELTA = float(weight_rank_delta)
+        self.SPEC_ENT_FLOOR = float(spec_entropy_floor)
+        self.HIGH_FRAC_FLOOR = float(high_frac_floor)
 
     def _score(self, diagnostics: Dict[str, Any]) -> float:
         div = float(diagnostics.get("divergence", 0.0))
@@ -103,8 +120,8 @@ class StabilityController:
             rank_delta = abs(eff_rank - self._prev_eff_rank)
         self._prev_eff_rank = eff_rank
 
-        spec_term = max(0.0, spec_entropy - 0.75)
-        high_term = max(0.0, high_frac - 0.30)
+        spec_term = max(0.0, spec_entropy - self.SPEC_ENT_FLOOR)
+        high_term = max(0.0, high_frac - self.HIGH_FRAC_FLOOR)
         score = (
             self.W_DIV * div
             + self.W_SPEC_ENT * spec_term
@@ -167,17 +184,23 @@ class DynamicInterventionHook:
     def __init__(self, intervention_fn):
         self.intervention_fn = intervention_fn
         self.active = False
+        self.last_hidden_pre: Optional[torch.Tensor] = None  # CPU tensor
+        self.last_hidden_post: Optional[torch.Tensor] = None  # CPU tensor
         self.last_hidden: Optional[torch.Tensor] = None  # CPU tensor
 
     def __call__(self, module, inputs, output):
         hs = output[0] if isinstance(output, tuple) else output
         hs_out = hs
+        hidden_last_pre = hs[:, -1, :].detach()
 
         if self.active and self.intervention_fn is not None:
             hs_out = self.intervention_fn(hs)
 
-        hidden_last = hs_out[:, -1, :].detach()
-        self.last_hidden = hidden_last.cpu()
+        hidden_last_post = hs_out[:, -1, :].detach()
+        self.last_hidden_pre = hidden_last_pre.cpu()
+        self.last_hidden_post = hidden_last_post.cpu()
+        # Keep last_hidden as backward-compatible alias to post-intervention state.
+        self.last_hidden = self.last_hidden_post
         if isinstance(output, tuple):
             return (hs_out,) + output[1:]
         return hs_out
@@ -187,6 +210,8 @@ class DynamicInterventionHook:
 
     def reset(self) -> None:
         self.active = False
+        self.last_hidden_pre = None
+        self.last_hidden_post = None
         self.last_hidden = None
 
 
@@ -256,6 +281,18 @@ def run_adaptive_controller_system4(
     sae_feature_idx: int = 0,
     sae_strength: float = 5.0,
     sae_normalize: bool = True,
+    control_threshold_warn: float = 0.55,
+    control_threshold_crit: float = 0.85,
+    control_scale_warn: float = 0.90,
+    control_scale_crit: float = 0.75,
+    control_hold_warn: int = 3,
+    control_hold_crit: int = 6,
+    control_weight_div: float = 0.70,
+    control_weight_spec_entropy: float = 0.15,
+    control_weight_high_frac: float = 0.10,
+    control_weight_rank_delta: float = 0.05,
+    control_spec_entropy_floor: float = 0.75,
+    control_high_frac_floor: float = 0.30,
     generate_dashboard_html: bool = True,
 ) -> Tuple[str, dict[str, Any]]:
     """Run adaptive-controller loop.
@@ -321,10 +358,18 @@ def run_adaptive_controller_system4(
             "normalize": bool(sae_normalize),
         },
         "controller": {
-            "th_warn": 0.55,
-            "th_crit": 0.85,
-            "scale_warn": 0.90,
-            "scale_crit": 0.75,
+            "th_warn": float(control_threshold_warn),
+            "th_crit": float(control_threshold_crit),
+            "scale_warn": float(control_scale_warn),
+            "scale_crit": float(control_scale_crit),
+            "hold_warn": int(control_hold_warn),
+            "hold_crit": int(control_hold_crit),
+            "w_div": float(control_weight_div),
+            "w_spec_entropy": float(control_weight_spec_entropy),
+            "w_high_frac": float(control_weight_high_frac),
+            "w_rank_delta": float(control_weight_rank_delta),
+            "spec_entropy_floor": float(control_spec_entropy_floor),
+            "high_frac_floor": float(control_high_frac_floor),
         },
     }
     config_hash = _hash_config(run_config)
@@ -358,7 +403,21 @@ def run_adaptive_controller_system4(
 
     probe_layers = list(dict.fromkeys([int(layer_idx), -1]))
     diagnostics_manager = DiagnosticsManager(enabled=True, probe_layers=probe_layers)
-    controller = StabilityController(ma_window=ma_window)
+    controller = StabilityController(
+        ma_window=ma_window,
+        threshold_warn=control_threshold_warn,
+        threshold_crit=control_threshold_crit,
+        scale_warn=control_scale_warn,
+        scale_crit=control_scale_crit,
+        hold_warn=control_hold_warn,
+        hold_crit=control_hold_crit,
+        weight_div=control_weight_div,
+        weight_spec_entropy=control_weight_spec_entropy,
+        weight_high_frac=control_weight_high_frac,
+        weight_rank_delta=control_weight_rank_delta,
+        spec_entropy_floor=control_spec_entropy_floor,
+        high_frac_floor=control_high_frac_floor,
+    )
 
     scale_state = ScaleState(1.0)
     if intervention_type == "scaling":
@@ -479,13 +538,27 @@ def run_adaptive_controller_system4(
 
                 # Measure divergence from the hidden state produced while processing token_id.
                 if hook.last_hidden is not None:
-                    hidden_norm = float(hook.last_hidden.norm().item())
-                    diagnostics = diagnostics_manager.step(hook.last_hidden, layer_states={int(layer_idx): hook.last_hidden})
+                    post_hidden = hook.last_hidden
+                    pre_hidden = hook.last_hidden_pre
+
+                    post_hidden_norm = float(post_hidden.norm().item())
+                    pre_hidden_norm = float(pre_hidden.norm().item()) if pre_hidden is not None else 0.0
+                    pre_post_delta_norm = (
+                        float((post_hidden - pre_hidden).norm().item())
+                        if pre_hidden is not None
+                        else 0.0
+                    )
+
+                    hidden_norm = post_hidden_norm
+                    diagnostics = diagnostics_manager.step(post_hidden, layer_states={int(layer_idx): post_hidden})
                     raw = float(diagnostics.get("divergence", 0.0))
                     next_scale, control_score, avg_score, status = controller.update(diagnostics)
                     next_scale = float(next_scale)
                 else:
                     hidden_norm = 0.0
+                    pre_hidden_norm = 0.0
+                    post_hidden_norm = 0.0
+                    pre_post_delta_norm = 0.0
                     raw = 0.0
                     diagnostics = {}
                     next_scale = float(scale_state.value)
@@ -533,6 +606,9 @@ def run_adaptive_controller_system4(
                     "avg_score": float(avg_score),
                     "diagnostics": diagnostics,
                     "hidden_norm": float(hidden_norm),
+                    "pre_hidden_norm": float(pre_hidden_norm),
+                    "post_hidden_norm": float(post_hidden_norm),
+                    "pre_post_delta_norm": float(pre_post_delta_norm),
                     "scale_used": float(scale_used),
                     "next_scale": float(next_scale),
                     "status": str(status),
@@ -637,6 +713,18 @@ if __name__ == "__main__":
     parser.add_argument("--max-new-tokens", type=int, default=64)
     parser.add_argument("--layer", type=int, default=-1, help="Layer index to hook (negative allowed)")
     parser.add_argument("--ma-window", type=int, default=3, help="Moving average window for controller")
+    parser.add_argument("--control-threshold-warn", type=float, default=0.55)
+    parser.add_argument("--control-threshold-crit", type=float, default=0.85)
+    parser.add_argument("--control-scale-warn", type=float, default=0.90)
+    parser.add_argument("--control-scale-crit", type=float, default=0.75)
+    parser.add_argument("--control-hold-warn", type=int, default=3)
+    parser.add_argument("--control-hold-crit", type=int, default=6)
+    parser.add_argument("--control-weight-div", type=float, default=0.70)
+    parser.add_argument("--control-weight-spec-entropy", type=float, default=0.15)
+    parser.add_argument("--control-weight-high-frac", type=float, default=0.10)
+    parser.add_argument("--control-weight-rank-delta", type=float, default=0.05)
+    parser.add_argument("--control-spec-entropy-floor", type=float, default=0.75)
+    parser.add_argument("--control-high-frac-floor", type=float, default=0.30)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--runs-dir", type=str, default=None, help="Base directory for run artifacts (default: $RUNS_DIR or ./runs)")
     parser.add_argument("--run-name", type=str, default="adaptive_demo", help="Prefix for run folder")
@@ -661,6 +749,18 @@ if __name__ == "__main__":
         max_new_tokens=args.max_new_tokens,
         layer_idx=args.layer,
         ma_window=args.ma_window,
+        control_threshold_warn=args.control_threshold_warn,
+        control_threshold_crit=args.control_threshold_crit,
+        control_scale_warn=args.control_scale_warn,
+        control_scale_crit=args.control_scale_crit,
+        control_hold_warn=args.control_hold_warn,
+        control_hold_crit=args.control_hold_crit,
+        control_weight_div=args.control_weight_div,
+        control_weight_spec_entropy=args.control_weight_spec_entropy,
+        control_weight_high_frac=args.control_weight_high_frac,
+        control_weight_rank_delta=args.control_weight_rank_delta,
+        control_spec_entropy_floor=args.control_spec_entropy_floor,
+        control_high_frac_floor=args.control_high_frac_floor,
         seed=args.seed,
         runs_dir=args.runs_dir,
         run_name=args.run_name,
