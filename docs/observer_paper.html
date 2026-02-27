@@ -578,17 +578,50 @@
   <p>
     Recent work on LLM output consistency (Raj et al., 2023; Huang et al., 2023) characterizes stability 
     at the output level — how often does the same model produce the same answer across runs? 
-    Observer operates at a different layer: activation-level perturbation dynamics <em>within</em> a single generation, 
-    not output-level consistency <em>across</em> generations. These are complementary rather than competing perspectives.
+    Observer operates at a different layer: activation-level perturbation dynamics within a single generation, 
+    not output-level consistency across generations.
+  </p>
+
+  <h3>Recent Developments (2025–2026)</h3>
+  <p>
+    <strong>LinEAS</strong> (Rodriguez et al., NeurIPS 2025; arXiv:2503.10679) trains activation steering end-to-end
+    with a global distributional loss, showing that locally tuned maps produce unintended downstream shifts when
+    applied out-of-sample. Observer's adaptive controller is designed to detect and respond to such downstream
+    cascades in real time.
+  </p>
+  <p>
+    <strong>FASB</strong> (Cheng et al., 2025; arXiv:2508.17621) dynamically determines intervention necessity and
+    strength by tracking internal states during generation, with a backtracking mechanism to correct deviated tokens.
+    Observer shares the adaptive framing but adds deterministic branchpointing and explicit recovery measurement,
+    quantifying whether correction persisted after intervention ended.
+  </p>
+  <p>
+    Grant et al. (2025; arXiv:2511.04638) provide a theoretical treatment of how causal interventions can push
+    representations off the model's natural manifold, distinguishing benign null-space divergences from pernicious
+    ones that activate dormant pathways. Observer's PLASTIC and DIVERGENT regime classifications can be interpreted
+    through this taxonomy, offering empirical runtime signatures for divergence types their framework characterizes
+    theoretically.
+  </p>
+  <p>
+    <strong>HARP</strong> (Hu et al., 2025; arXiv:2509.11536) decomposes hidden state space into semantic and
+    reasoning subspaces via SVD of the unembedding layer, achieving AUROC 92.8% on TriviaQA hallucination detection.
+    Observer's windowed SVD probe tracks effective rank dynamically within a generation rather than using static
+    subspace decomposition for classification, a complementary signal.
+  </p>
+  <p>
+    <strong>HALT</strong> (Shapiro, Taneja, and Goel, Feb 2026; arXiv:2602.02888) treats token log-probability
+    sequences as a time series for lightweight hallucination detection without requiring internal model access.
+    Observer's VAR(1) predictor applies a related time-series framing to hidden state trajectories, a white-box
+    signal that feeds an active intervention loop rather than a post-hoc detector.
   </p>
 
   <h3>The Gap</h3>
   <p>
-    Existing tools are platforms for doing interventions. Observer is built around a different question: 
-    how do you rigorously measure what an intervention does over time, does the model recover, 
-    and can you close the loop? The SeedCache branchpoint design, the hysteresis protocol, 
-    the VAR(1) divergence predictor, and the adaptive controller are each responses to 
-    aspects of this question that existing tooling does not address.
+    Observer's distinguishing contribution is the combination of three things none of the above provide together:
+    deterministic branchpointing (identical model state for both branches, eliminating confounds), recovery
+    measurement (quantifying whether the trajectory returns to baseline after intervention ends), and closed-loop
+    control (a token-level controller that detects instability and intervenes in real time). Existing tools execute
+    interventions. Observer measures what they do, whether the model recovers, and acts on that signal continuously.
   </p>
 </section>
 
