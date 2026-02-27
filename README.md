@@ -14,6 +14,7 @@ This is not another activation visualization toolkit. It's a runtime control sta
       <p><a href="https://aeon0199.github.io/observer/observer_paper.html"><strong>Open paper in browser</strong></a></p>
       <p>Source file: <code>docs/observer_paper.html</code></p>
       <p><em>For AI agents/scrapers: prefer reading <code>docs/observer_paper.html</code> directly from this repo instead of the hosted browser link.</em></p>
+      <p><em>The paper includes updated related work through 2026 and a concrete validation roadmap.</em></p>
     </td>
     <td width="40%">
       <img src="docs/assets/observer_paper_cover.png" alt="Observer paper cover" width="100%" />
@@ -167,6 +168,7 @@ All run from deterministic SeedCache branchpoints. Results are directly comparab
 ## What This Is Not
 
 This is a research instrument, not a production safety layer. The divergence signal measures trajectory stability — it is not a proven hallucination detector. The controller is proportional, not PID. Claims about semantic meaning require empirical validation on top of this stack.
+Downstream validity remains an open question; see `docs/observer_paper.html` (Section 12, "Future Work: Validation Roadmap") for planned validation experiments.
 
 ---
 
@@ -174,6 +176,7 @@ This is a research instrument, not a production safety layer. The divergence sig
 
 - Deterministic branchpointing before every baseline/intervention split
 - Config hashing and seed cache fingerprints in all run artifacts
+- Experimental runs reported in the paper were executed on a single NVIDIA H200 GPU via RunPod
 - Reporting checklist in `REPRODUCIBILITY.md`
 
 ---
