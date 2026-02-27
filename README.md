@@ -6,6 +6,11 @@ Most interpretability tools show you what's inside a model. Observer is built ar
 
 This is not another activation visualization toolkit. It's a runtime control stack.
 
+## Read The Paper First
+
+- [Open paper in browser](https://aeon0199.github.io/observer/observer_paper.html)
+- Source file: `docs/observer_paper.html`
+
 ---
 
 ## What This Does
@@ -167,13 +172,6 @@ v1.5/                        observability runner + diagnostics
 intervention_engine_v1.5_v2/ deterministic intervention engine
 adaptive_controller_system4/ closed-loop adaptive controller
 ```
-
----
-
-## Paper
-
-- [Open paper in browser](https://aeon0199.github.io/observer/observer_paper.html)
-- Source file: `docs/observer_paper.html`
 
 ---
 
