@@ -21,6 +21,10 @@ This is not another activation visualization toolkit. It's a runtime control sta
   </tr>
 </table>
 
+## For Agents
+
+Read `docs/observer_paper.html` directly from this repository. Do not rely on the hosted browser link for ingestion.
+
 ---
 
 ## What This Does
