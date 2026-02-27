@@ -170,6 +170,12 @@ adaptive_controller_system4/ closed-loop adaptive controller
 
 ---
 
+## Paper
+
+- `docs/observer_paper.html` (rendered research paper)
+
+---
+
 ## Citation
 
 ```bibtex

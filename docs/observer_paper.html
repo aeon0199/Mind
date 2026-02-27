@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>observer: Closed-Loop Stability Control for Language Model Inference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f0e;
+    --surface: #131614;
+    --surface2: #1a1d1b;
+    --border: #252925;
+    --border2: #2f342f;
+    --text: #d4d9d4;
+    --text-dim: #7a8a7a;
+    --text-dimmer: #4a574a;
+    --accent: #6ee87a;
+    --accent2: #3adc4a;
+    --accent-dim: #1a3a1e;
+    --warn: #e8c46e;
+    --warn-dim: #3a2e1a;
+    --code-bg: #0a0c0a;
+    --red: #e86e6e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    font-size: 16px;
+    background: var(--bg);
+    color: var(--text);
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    line-height: 1.75;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 2rem 8rem;
+  }
+
+  /* ─── HEADER ─── */
+  .paper-header {
+    padding: 5rem 0 3rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 3rem;
+    animation: fadeUp 0.8s ease both;
+  }
+
+  .label-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: 0.25em 0.75em;
+    border-radius: 2px;
+  }
+
+  .label-plain {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 300;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: #e8ede8;
+    margin-bottom: 1.25rem;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .subtitle {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.05rem;
+    color: var(--text-dim);
+    font-weight: 300;
+    max-width: 640px;
+    line-height: 1.65;
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .meta-item {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-dimmer);
+  }
+
+  .meta-item span {
+    color: var(--text-dim);
+    display: block;
+    margin-top: 0.2em;
+  }
+
+  /* ─── SECTIONS ─── */
+  section {
+    margin-bottom: 3.5rem;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: #e8ede8;
+    letter-spacing: -0.01em;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+  }
+
+  h2 .sec-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+
+  h3 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 2rem 0 0.75rem;
+  }
+
+  p {
+    font-size: 0.975rem;
+    color: var(--text);
+    margin-bottom: 1rem;
+    font-weight: 300;
+  }
+
+  strong {
+    font-weight: 500;
+    color: #e8ede8;
+  }
+
+  em {
+    font-style: italic;
+    color: var(--text-dim);
+  }
+
+  /* ─── ABSTRACT BOX ─── */
+  .abstract {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 1.75rem 2rem;
+    border-radius: 4px;
+    margin-bottom: 3.5rem;
+    animation: fadeUp 0.7s ease both;
+  }
+
+  .abstract-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.75rem;
+  }
+
+  .abstract p {
+    font-size: 0.95rem;
+    line-height: 1.8;
+    color: var(--text-dim);
+    margin-bottom: 0;
+  }
+
+  /* ─── CODE ─── */
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.5rem;
+    overflow-x: auto;
+    margin: 1.25rem 0;
+    position: relative;
+  }
+
+  pre .code-label {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.75rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dimmer);
+  }
+
+  code {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.7;
+    color: #9ecf9e;
+  }
+
+  p code, li code {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 0.1em 0.4em;
+    border-radius: 2px;
+    font-size: 0.8rem;
+    color: var(--accent);
+  }
+
+  .comment { color: var(--text-dimmer); font-style: italic; }
+  .kw { color: #7ec8e3; }
+  .fn { color: #e8c46e; }
+  .str { color: #b5e8b5; }
+  .num { color: #e8a06e; }
+
+  /* ─── CALLOUT ─── */
+  .callout {
+    background: var(--warn-dim);
+    border: 1px solid var(--warn);
+    border-radius: 4px;
+    padding: 1.25rem 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .callout p {
+    color: var(--warn);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .callout-green {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+  }
+
+  .callout-green p {
+    color: var(--accent);
+  }
+
+  /* ─── FORMULA ─── */
+  .formula {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.25rem 2rem;
+    margin: 1.25rem 0;
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+    line-height: 2;
+    overflow-x: auto;
+  }
+
+  /* ─── TABLE ─── */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 1.5rem 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  th {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border2);
+    padding: 0.6rem 1rem;
+    text-align: left;
+    font-weight: 400;
+  }
+
+  td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.875rem;
+    vertical-align: top;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  td strong { color: var(--text); }
+  td code { font-size: 0.75rem; }
+
+  /* ─── FIGURE / DIAGRAM ─── */
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2rem;
+    margin: 1.5rem 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    line-height: 1.8;
+    overflow-x: auto;
+  }
+
+  .diagram .d-accent { color: var(--accent); }
+  .diagram .d-warn { color: var(--warn); }
+  .diagram .d-dim { color: var(--text-dimmer); }
+
+  .fig-caption {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dimmer);
+    text-align: center;
+    margin-top: 0.5rem;
+    letter-spacing: 0.05em;
+  }
+
+  /* ─── REGIME GRID ─── */
+  .regime-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin: 1.25rem 0;
+  }
+
+  .regime-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem 1.25rem;
+  }
+
+  .regime-card .rc-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.4rem;
+  }
+
+  .rc-elastic { color: var(--accent); }
+  .rc-partial { color: #6ebde8; }
+  .rc-plastic { color: var(--warn); }
+  .rc-divergent { color: var(--red); }
+
+  .regime-card p {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    margin: 0;
+  }
+
+  /* ─── COMPONENT STACK ─── */
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 1.25rem 0;
+  }
+
+  .stack-item {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .stack-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    padding: 0.75rem 0.9rem;
+    background: var(--surface2);
+    color: var(--accent);
+    border-right: 1px solid var(--border);
+    min-width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-transform: uppercase;
+    writing-mode: horizontal-tb;
+    white-space: nowrap;
+  }
+
+  .stack-content {
+    padding: 0.75rem 1.25rem;
+    flex: 1;
+  }
+
+  .stack-content strong {
+    font-size: 0.85rem;
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  .stack-content p {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin: 0;
+  }
+
+  /* ─── FOOTNOTES ─── */
+  .footnotes {
+    border-top: 1px solid var(--border);
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-dimmer);
+    line-height: 1.7;
+  }
+
+  .footnotes a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  section:nth-child(1) { animation-delay: 0.05s; }
+  section:nth-child(2) { animation-delay: 0.1s; }
+  section:nth-child(3) { animation-delay: 0.15s; }
+  section:nth-child(4) { animation-delay: 0.2s; }
+  section:nth-child(5) { animation-delay: 0.25s; }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 600px) {
+    body { padding: 0 1rem 5rem; }
+    .regime-grid { grid-template-columns: 1fr; }
+    .meta-row { gap: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header class="paper-header">
+  <div class="label-row">
+    <span class="label">Preprint</span>
+    <span class="label-plain">February 2026</span>
+  </div>
+  <h1><em>observer</em>: Closed-Loop Stability Control<br>for Language Model Inference</h1>
+  <p class="subtitle">
+    A runtime instrumentation stack for measuring perturbation dynamics, 
+    quantifying recovery behavior, and applying proportional damping 
+    during autoregressive generation — without modifying model weights.
+  </p>
+  <div class="meta-row">
+    <div class="meta-item">AUTHOR<span>Josh Malone</span></div>
+    <div class="meta-item">REPOSITORY<span>github.com/aeon0199/llm-stability-runtime</span></div>
+    <div class="meta-item">LICENSE<span>MIT</span></div>
+  </div>
+</header>
+
+<div class="abstract">
+  <div class="abstract-label">Abstract</div>
+  <p>
+    We present <strong>observer</strong>, an open-source runtime stack for inference-time stability research on autoregressive language models. 
+    The field has invested heavily in understanding model internals — circuit discovery, feature visualization, activation steering — 
+    but comparatively little work addresses behavioral stability during generation: how perturbations propagate through 
+    the hidden trajectory, whether models recover from them, and whether recovery can be induced in real time.
+    Observer addresses this gap through four independently usable protocol layers: a three-stage hysteresis protocol 
+    for measuring perturbation persistence, a single-pass observability runner with streaming diagnostics, 
+    a deterministic intervention engine built around a <em>SeedCache</em> branchpoint design that eliminates 
+    common confounds in intervention experiments, and a closed-loop adaptive controller that applies proportional 
+    damping in response to a per-token divergence signal. The divergence signal is derived from a VAR(1) model 
+    fit on projected hidden states, providing a held-out one-step prediction error that captures local trajectory 
+    instability before it manifests in model output. We describe the architecture, the experimental protocols, 
+    and the design decisions that distinguish this approach from existing interpretability tooling.
+  </p>
+</div>
+
+<section>
+  <h2><span class="sec-num">§1</span> Motivation</h2>
+  <p>
+    The dominant paradigm in mechanistic interpretability — sparse autoencoders, circuit discovery, logit lens analysis — 
+    answers the question <em>"what does this model compute?"</em> It is fundamentally a post-hoc analytical approach. 
+    The field has produced significant understanding of model internals, but has largely deferred a different class of question:
+  </p>
+  <p>
+    <strong>Can we detect when generation is destabilizing, in real time, and do something about it?</strong>
+  </p>
+  <p>
+    This is the question observer is built to answer. It is closer in spirit to control engineering than to interpretability 
+    research: rather than analyzing a system's internal structure, we treat the model as a dynamical system 
+    and ask whether we can build a feedback loop around it.
+  </p>
+  <p>
+    The practical stakes are not abstract. High-stakes deployments of language models — in agentic settings, 
+    long-horizon tasks, adversarial environments — require some answer to the question of whether generation 
+    has gone off course and whether that course can be corrected. The current state of the art is largely 
+    output-level heuristics: does the text look wrong? Observer proposes that the answer should be 
+    visible in the hidden trajectory before it surfaces in the output, and that a runtime controller 
+    can act on that signal.
+  </p>
+
+  <div class="callout callout-green">
+    <p>
+      <strong>Scope caveat:</strong> Observer is a research instrument. The divergence signal measures 
+      trajectory instability — it is not a proven hallucination detector. The controller is a proportional 
+      brake, not a proven safety layer. Empirical validation of downstream correlates is the necessary next step.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="sec-num">§2</span> Related Work</h2>
+  <p>
+    Observer occupies a space adjacent to several lines of existing work, without directly duplicating any of them.
+  </p>
+
+  <h3>Intervention Tooling</h3>
+  <p>
+    <strong>TransformerLens</strong> (Nanda, 2022) provides the dominant toolkit for mechanistic interpretability 
+    research: model loading, hook-based activation capture and modification, and a large community of research 
+    built on its abstractions. It is an exploration tool — excellent for research notebooks and circuit analysis, 
+    not designed around systematic experimental protocols or recovery measurement.
+  </p>
+  <p>
+    <strong>pyvene</strong> (Wu et al., 2024) formalizes interventions as first-class serializable primitives, 
+    enabling composable intervention specifications across locations, granularity, and sequence position. 
+    It is an execution library: it provides the mechanics of intervention without opinions about experimental design, 
+    hysteresis, or recovery.
+  </p>
+  <p>
+    <strong>nnsight</strong> provides a Pythonic interface for local and remote model execution, including 
+    access to frontier models via the NDIF infrastructure. Observer supports nnsight as an optional backend, 
+    inheriting its remote execution capabilities.
+  </p>
+
+  <h3>Representation Engineering and Steering</h3>
+  <p>
+    The Representation Engineering paper (Zou et al., 2023) demonstrated that model behavioral tendencies 
+    can be read from and written to activation space via linear probes and steering vectors. The Inference-Time 
+    Intervention paper (Li et al., 2023) applied shifted activations at inference time, improving TruthfulQA 
+    performance from 32.5% to 65.1%. Neither line of work focused on recovery dynamics or closed-loop feedback.
+  </p>
+
+  <h3>LLM Stability</h3>
+  <p>
+    Recent work on LLM output consistency (Raj et al., 2023; Huang et al., 2023) characterizes stability 
+    at the output level — how often does the same model produce the same answer across runs? 
+    Observer operates at a different layer: activation-level perturbation dynamics <em>within</em> a single generation, 
+    not output-level consistency <em>across</em> generations. These are complementary rather than competing perspectives.
+  </p>
+
+  <h3>The Gap</h3>
+  <p>
+    Existing tools are platforms for doing interventions. Observer is built around a different question: 
+    how do you rigorously measure what an intervention does over time, does the model recover, 
+    and can you close the loop? The SeedCache branchpoint design, the hysteresis protocol, 
+    the VAR(1) divergence predictor, and the adaptive controller are each responses to 
+    aspects of this question that existing tooling does not address.
+  </p>
+</section>
+
+<section>
+  <h2><span class="sec-num">§3</span> Architecture Overview</h2>
+  <p>
+    Observer is organized as four protocol layers, each independently usable and composable:
+  </p>
+
+  <div class="stack">
+    <div class="stack-item">
+      <div class="stack-tag">V1</div>
+      <div class="stack-content">
+        <strong>baseline_hysteresis_v1 — Hysteresis Protocol</strong>
+        <p>Three-stage protocol (BASE → PERTURB → REASK) for measuring perturbation persistence. Does the model self-correct when re-asked, given that the perturbation remains in the KV cache?</p>
+      </div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-tag">V1.5</div>
+      <div class="stack-content">
+        <strong>v1.5 — Observability Runner</strong>
+        <p>Single-pass token-level telemetry with streaming diagnostics: VAR(1) divergence predictor, spectral leakage metrics, layer stiffness, windowed SVD. No branching, no intervention.</p>
+      </div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-tag">V2</div>
+      <div class="stack-content">
+        <strong>intervention_engine_v1.5_v2 — Deterministic Intervention Engine</strong>
+        <p>Baseline vs. intervention comparison via SeedCache branchpoint. Both branches start from identical model state. Supports additive, projection, scaling, and SAE-based interventions.</p>
+      </div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-tag">S4</div>
+      <div class="stack-content">
+        <strong>adaptive_controller_system4 — Closed-Loop Controller</strong>
+        <p>Proportional controller with moving-average smoother and cooldown. Composite divergence score drives hidden-state scaling in real time. Shadow mode for calibration before active deployment.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="diagram">
+<pre style="background:none;border:none;padding:0;margin:0;font-size:0.75rem;">
+<span class="d-dim">PROMPT</span>
+   │
+   ▼
+<span class="d-accent">[ SeedCache: build_seed_cache() ]</span>
+   │   past_key_values snapshot
+   │   next_token_logits
+   │   seed_hidden @ intervention_layer
+   │
+   ├──────────────────────────┐
+   ▼                          ▼
+<span class="d-accent">[ BASELINE branch ]</span>          <span class="d-warn">[ INTERVENTION branch ]</span>
+   SeedCache.clone()           SeedCache.clone()
+   greedy generation           hook active: intervene()
+   trajectory captured         trajectory captured
+   │                          │
+   └──────────┬───────────────┘
+              ▼
+   <span class="d-accent">[ TrajectoryComparison ]</span>
+      cosine distance per token
+      JS divergence on logits
+      regime classification
+      recovery metrics</pre>
+  </div>
+  <div class="fig-caption">Figure 1. Intervention engine data flow. Both branches derive from identical prompt-pass state via SeedCache.clone().</div>
+</section>
+
+<section>
+  <h2><span class="sec-num">§4</span> SeedCache: Deterministic Branchpointing</h2>
+  <p>
+    The central design problem in intervention experiments is confounding. A naive implementation runs 
+    the baseline and intervention branches from separate forward passes over the same prompt. 
+    This introduces at minimum: different random number generator states at the point of token sampling 
+    (even under greedy decoding, CUDA operations can have ordering nondeterminism), and potentially 
+    different attention mask states depending on the batching implementation.
+  </p>
+  <p>
+    The SeedCache resolves this by running the prompt <strong>exactly once</strong>, then cloning 
+    the resulting model state for both branches:
+  </p>
+
+  <pre><code><span class="comment"># Run prompt once, snapshot pre-generation state</span>
+<span class="kw">def</span> <span class="fn">build_seed_cache</span>(model, tokenizer, device, prompt, layer) -> SeedCache:
+    hook = _HiddenCaptureHook()
+    handle = layers[layer].register_forward_hook(hook)
+    
+    <span class="kw">with</span> torch.no_grad():
+        outputs = model(input_ids, use_cache=<span class="kw">True</span>, return_dict=<span class="kw">True</span>)
+    handle.remove()
+    
+    <span class="kw">return</span> SeedCache(
+        past_key_values = outputs.past_key_values,   <span class="comment"># full KV cache</span>
+        next_token_logits = outputs.logits[:,-1,:],  <span class="comment"># first token dist</span>
+        seed_hidden = hook.captured,                 <span class="comment"># hidden @ layer</span>
+        fingerprint = compute_cache_fingerprint(...) <span class="comment"># checksum</span>
+    )
+
+<span class="comment"># Both branches start from identical state</span>
+baseline_cache = seed_cache.clone()
+intervention_cache = seed_cache.clone()
+<span class="comment"># SeedCache.clone() deep-copies past_key_values via clone_past_key_values()</span>
+<span class="comment"># handles DynamicCache, legacy tuple-of-tuples, and generic objects</span></code><span class="code-label">cache.py</span></pre>
+
+  <p>
+    The fingerprint — derived from the first-layer key cache statistics — provides a checksum that 
+    experiments can log to verify both branches genuinely share a common origin. This is the kind of 
+    rigor that most published intervention papers treat as an implementation detail but actually matters 
+    for result validity.
+  </p>
+
+  <div class="callout">
+    <p>
+      <strong>Why this matters:</strong> Without a shared branchpoint, "recovery" measurements conflate 
+      genuine behavioral change with noise introduced by divergent initial conditions. 
+      The SeedCache makes the comparison meaningful.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="sec-num">§5</span> The Divergence Signal</h2>
+  <p>
+    The core signal feeding both the observability runner and the adaptive controller is a 
+    <strong>per-token held-out prediction error</strong> from a VAR(1) model fit on 
+    a sliding window of projected hidden states.
+  </p>
+
+  <h3>Projection</h3>
+  <p>
+    The hidden state <strong>h</strong><sub>t</sub> ∈ ℝ<sup>D</sup> (where D is the model's hidden dimension, 
+    typically 4096–8192) is projected to a fixed low-dimensional space via a deterministic Rademacher matrix:
+  </p>
+
+  <div class="formula">
+    z<sub>t</sub> = h<sub>t</sub> · P,   P ∈ {±1/√k}<sup>D×k</sup>,   k = 64
+    <br>
+    P is fixed for the run lifetime (seeded, deterministic)
+  </div>
+
+  <p>
+    The Rademacher projection preserves inner products in expectation (Johnson-Lindenstrauss), 
+    reduces the regression problem from D-dimensional to k-dimensional (k=64), 
+    and is computed once per hidden dimension via a seeded RNG — making it reproducible 
+    across runs and comparable across model families with different hidden sizes.
+  </p>
+
+  <h3>VAR(1) Dynamics</h3>
+  <p>
+    A first-order vector autoregressive model is fit on the sliding window 
+    W = {z<sub>t-n</sub>, ..., z<sub>t-1</sub>} via ridge regression:
+  </p>
+
+  <div class="formula">
+    z<sub>t</sub> ≈ z<sub>t-1</sub> · A,   A ∈ ℝ<sup>k×k</sup>
+    <br>
+    (X<sup>T</sup>X + λI) A = X<sup>T</sup>Y,   λ = 0.01
+  </div>
+
+  <p>
+    Critically, the matrix A is fit on the window <em>excluding the newest state</em> z<sub>t</sub>. 
+    The prediction z&#770;<sub>t</sub> = z<sub>t-1</sub> · A is then compared to the actual observed z<sub>t</sub>. 
+    This is a held-out evaluation: the model is never trained on the transition it is asked to predict. 
+    This matters because in-sample VAR(1) error on a short window would collapse toward zero regardless of 
+    actual trajectory instability.
+  </p>
+
+  <h3>Divergence Score</h3>
+  <p>
+    The per-token scalar divergence combines normalized L2 error and cosine distance with a 
+    symmetric denominator to avoid blow-ups when projected norms are near zero:
+  </p>
+
+  <div class="formula">
+    L2<sub>norm</sub> = ||ẑ<sub>t</sub> − z<sub>t</sub>|| / (0.5 · (||ẑ<sub>t</sub>|| + ||z<sub>t</sub>||) + ε)
+    <br>
+    cos<sub>dist</sub> = 1 − (ẑ<sub>t</sub> · z<sub>t</sub>) / (||ẑ<sub>t</sub>|| · ||z<sub>t</sub>|| + ε)
+    <br>
+    divergence = 0.7 · L2<sub>norm</sub> + 0.3 · cos<sub>dist</sub>
+  </div>
+
+  <p>
+    When the hidden trajectory is locally predictable, the VAR(1) fit is good and divergence is low. 
+    When generation dynamics shift — through perturbation, distributional shift in the prompt context, 
+    or internal instability — the held-out prediction error increases. The signal is cheap: 
+    one matrix multiply per token in 64-dimensional space.
+  </p>
+
+  <pre><code><span class="kw">def</span> <span class="fn">step</span>(self, hidden: torch.Tensor) -> float:
+    z = self._project(hidden)          <span class="comment"># (D,) → (64,)</span>
+    self._window.add(z)                <span class="comment"># FIFO buffer, maxlen=8</span>
+    
+    <span class="kw">if</span> <span class="fn">len</span>(self._window) < <span class="num">3</span>:
+        <span class="kw">return</span> <span class="num">0.0</span>
+    
+    states = self._window.matrix()     <span class="comment"># (T, 64)</span>
+    train  = states[:-<span class="num">1</span>, :]           <span class="comment"># exclude newest</span>
+    A      = _fit_var1_ridge(train)    <span class="comment"># fit on T-1 transitions</span>
+    
+    pred   = states[-<span class="num">2</span>, :] @ A       <span class="comment"># predict from t-1</span>
+    actual = states[-<span class="num">1</span>, :]           <span class="comment"># held-out: actual t</span>
+    
+    <span class="kw">return</span> _divergence(pred, actual)[<span class="str">"combined"</span>]</code><span class="code-label">predictor.py</span></pre>
+</section>
+
+<section>
+  <h2><span class="sec-num">§6</span> Supplementary Diagnostics</h2>
+  <p>
+    The divergence signal is the primary input to the controller, but the V1.5 observability 
+    runner and the adaptive controller also compute three supplementary diagnostics that provide 
+    corroborating signal and richer telemetry for offline analysis.
+  </p>
+
+  <h3>Spectral Diagnostics</h3>
+  <p>
+    The hidden state vector is treated as a 1D signal over its feature index and subjected to 
+    an FFT-based analysis. This is not a claim about physical frequency structure — 
+    the feature index is not a temporal axis. Rather, it provides a stable, 
+    cheap characterization of whether activation energy is concentrated in a narrow band or 
+    spread broadly across dimensions. The metrics extracted are:
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>spectral_entropy</code></td><td>Normalized Shannon entropy of the power spectrum. High = diffuse energy distribution.</td></tr>
+        <tr><td><code>spectral_flatness</code></td><td>Geometric mean / arithmetic mean of power. Approaches 1.0 for white noise, 0.0 for pure tones.</td></tr>
+        <tr><td><code>centroid</code></td><td>Normalized frequency centroid ∈ [0,1]. High centroid = energy concentrated at high spatial frequencies.</td></tr>
+        <tr><td><code>high_frac</code></td><td>Fraction of power in the top 20% of frequency bins. Proxy for fine-grained activation roughness.</td></tr>
+        <tr><td><code>rolloff_85</code></td><td>Normalized frequency below which 85% of cumulative power falls.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Windowed SVD</h3>
+  <p>
+    A window of hidden vectors {h<sub>t-w</sub>, ..., h<sub>t</sub>} ∈ ℝ<sup>W×D</sup> is stacked into 
+    a matrix X and its singular value decomposition computed via the Gram trick: eigenvalues of XX<sup>T</sup> 
+    (a W×W matrix with small W) yield the squared singular values without requiring the full D×D computation.
+    An SVD of a single vector returns only the vector norm — uninformative. 
+    The windowed approach captures the local rank structure of the trajectory: 
+    whether the model is moving through a low-dimensional manifold or exploring higher-dimensional space.
+  </p>
+  <p>
+    Effective rank is computed as exp(H(p)) where p is the normalized singular value distribution — 
+    the exponential of the entropy of squared singular values. A drop in effective rank signals 
+    that the trajectory is collapsing onto a lower-dimensional subspace, a potential precursor to 
+    repetition or mode collapse.
+  </p>
+
+  <h3>Layer Stiffness</h3>
+  <p>
+    At three probed layers (early / mid / late), the velocity norm v<sub>t</sub> = ||h<sub>t</sub><sup>L</sup> − h<sub>t-1</sub><sup>L</sup>||<sub>2</sub> is tracked over a sliding window. Mean velocity defines <em>stiffness</em>; the linear slope of velocity over the window defines <em>stiffness trend</em>. Elasticity = 1/(1 + stiffness) provides a bounded stability score in (0,1]. This is a diagnostic proxy, not a physical quantity.
+  </p>
+</section>
+
+<section>
+  <h2><span class="sec-num">§7</span> The Hysteresis Protocol</h2>
+  <p>
+    The baseline hysteresis module implements a three-stage experimental protocol for 
+    measuring how much of a perturbation's effect persists after the perturbation is removed.
+  </p>
+
+  <div class="diagram">
+<pre style="background:none;border:none;padding:0;margin:0;font-size:0.75rem;">
+Stage 1: <span class="d-accent">BASE</span>
+  ─────────────────────────────────────────────────────
+  Prompt → SeedCache → greedy generation
+  Capture: hidden_norm, entropy, logit_norm, SVD spectrum
+  
+Stage 2: <span class="d-warn">PERTURB</span>
+  ─────────────────────────────────────────────────────
+  Same SeedCache + Delta instruction injected
+  Capture same statistics
+  KV cache retained for Stage 3
+  
+Stage 3: <span class="d-dim">REASK</span>
+  ─────────────────────────────────────────────────────
+  Continue from PERTURB's KV cache
+  Minimal re-ask (no repeated prompt)
+  Perturbation still in context; does model return to BASE?
+
+Metrics:
+  D = composite distance(BASE, PERTURB)      <span class="d-dim">← drift</span>
+  H = composite distance(BASE, REASK)        <span class="d-dim">← hysteresis</span>
+  R = 1 - H / (D + ε)                       <span class="d-dim">← recovery ∈ (-∞, 1]</span></pre>
+  </div>
+
+  <p>
+    The composite distance used in the metric computation draws on four component signals: 
+    relative hidden norm difference, entropy distance, relative logit norm difference, 
+    and SVD spectral distance (normalized L2 between top singular value vectors). 
+    These are combined with equal weights except logit norm (0.5×), 
+    reflecting that hidden state geometry carries more signal than logit magnitude.
+  </p>
+
+  <p>Recovery R is classified into four regimes:</p>
+
+  <div class="regime-grid">
+    <div class="regime-card">
+      <div class="rc-label rc-elastic">ELASTIC</div>
+      <p>R &gt; 0.8. Model substantially returns to baseline behavior despite perturbation remaining in context.</p>
+    </div>
+    <div class="regime-card">
+      <div class="rc-label rc-partial">PARTIAL</div>
+      <p>0.4 &lt; R ≤ 0.8. Partial recovery; residual perturbation effect visible in trajectory statistics.</p>
+    </div>
+    <div class="regime-card">
+      <div class="rc-label rc-plastic">PLASTIC</div>
+      <p>0 ≤ R ≤ 0.4. Perturbation effect persists significantly. Model has been durably steered.</p>
+    </div>
+    <div class="regime-card">
+      <div class="rc-label rc-divergent">DIVERGENT</div>
+      <p>R &lt; 0. REASK is further from BASE than PERTURB was. Perturbation has amplified rather than decayed.</p>
+    </div>
+  </div>
+
+  <p>
+    This taxonomy provides vocabulary for characterizing perturbation experiments that the 
+    field currently lacks. Whether a given prompt-perturbation pair produces elastic, plastic, 
+    or divergent behavior is a property of the model that is currently unknown for most 
+    practically relevant perturbation types.
+  </p>
+</section>
+
+<section>
+  <h2><span class="sec-num">§8</span> Intervention Engine</h2>
+  <p>
+    The intervention engine is the core experimental workhorse. It runs baseline and intervention 
+    branches from a shared SeedCache, captures full hidden trajectories from both, and 
+    computes a rich set of comparison metrics.
+  </p>
+
+  <h3>Intervention Types</h3>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Type</th><th>Operation</th><th>Parameters</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>additive</strong></td>
+          <td>Add a unit random vector scaled by magnitude to last-token hidden state.</td>
+          <td><code>magnitude</code>, <code>seed</code></td>
+        </tr>
+        <tr>
+          <td><strong>projection</strong></td>
+          <td>Project out a random k-dimensional subspace: h ← h (I − QQ<sup>T</sup>)</td>
+          <td><code>subspace_dim</code>, <code>seed</code></td>
+        </tr>
+        <tr>
+          <td><strong>scaling</strong></td>
+          <td>Multiply last-token hidden state by scalar s.</td>
+          <td><code>scale</code></td>
+        </tr>
+        <tr>
+          <td><strong>sae</strong></td>
+          <td>Steer along SAE decoder column for a specified feature index.</td>
+          <td><code>sae_repo</code>, <code>feature_idx</code>, <code>strength</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    Hooks are registered with <code>register_forward_hook</code> and removed in <code>finally</code> 
+    blocks. Critically, the intervention is applied <em>before</em> the hook captures the hidden state — 
+    so the captured tensor reflects what downstream layers actually receive, not the pre-intervention value. 
+    This is the correct ordering that many published implementations miss.
+  </p>
+
+  <h3>Trajectory Comparison</h3>
+  <p>
+    The <code>TrajectoryComparison</code> object implements a layered fallback strategy for 
+    computing per-token distances between branches:
+  </p>
+  <p>
+    The primary metric is cosine distance on actual hidden vectors (preferred). If hooks fail 
+    to attach and hidden vectors are unavailable, it falls back to Jensen-Shannon divergence 
+    on the logit distributions. If logits are also unavailable, it falls back to normalized L2 
+    on hidden norms. The code documents this explicitly: <em>"hidden_norm alone is not sufficient — 
+    the same norm can hide large vector changes."</em>
+  </p>
+  <p>
+    Recovery is computed over the post-intervention window: deviation_during (mean primary metric 
+    during active intervention), final_distance (primary metric at final token), 
+    recovery_ratio = (deviation_during − final_distance) / deviation_during, 
+    and convergence_rate (negative slope of primary metric over post-intervention tokens via linear fit).
+  </p>
+</section>
+
+<section>
+  <h2><span class="sec-num">§9</span> Adaptive Controller</h2>
+  <p>
+    The adaptive controller closes the loop: per-token diagnostics drive a proportional 
+    scaling intervention that damps the hidden state when the composite score exceeds a threshold.
+  </p>
+
+  <h3>Composite Score</h3>
+
+  <div class="formula">
+    score<sub>t</sub> = 0.70 · divergence<sub>t</sub>
+                   + 0.15 · max(0, spectral_entropy<sub>t</sub> − 0.75)
+                   + 0.10 · max(0, high_frac<sub>t</sub> − 0.30)
+                   + 0.05 · |eff_rank<sub>t</sub> − eff_rank<sub>t-1</sub>|
+  </div>
+
+  <p>
+    The spectral and SVD terms are gated — they only contribute when they exceed a baseline 
+    level (spectral entropy above 0.75, high-frequency fraction above 0.30), 
+    to avoid penalizing normal variation. The rank delta term detects sudden changes in 
+    trajectory dimensionality.
+  </p>
+
+  <h3>Control Logic</h3>
+  <p>
+    A 3-token moving average of the score is computed. When the smoothed score exceeds a 
+    threshold, the controller applies a scaling intervention to the last-token hidden state 
+    at the monitored layer, then enters a cooldown period during which the scale is held and 
+    further threshold evaluations are suppressed:
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Status</th><th>Condition</th><th>Scale Applied</th><th>Cooldown</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>STABLE</strong></td><td>avg_score ≤ 0.55</td><td>1.0 (no intervention)</td><td>—</td></tr>
+        <tr><td><strong>WARNING</strong></td><td>0.55 &lt; avg_score ≤ 0.85</td><td>0.90</td><td>3 tokens</td></tr>
+        <tr><td><strong>CRITICAL</strong></td><td>avg_score &gt; 0.85</td><td>0.75</td><td>6 tokens</td></tr>
+        <tr><td><strong>COOLDOWN</strong></td><td>Post-intervention hold</td><td>Held from trigger</td><td>Counting down</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    The scaling intervention multiplies the hidden state: h<sub>t</sub> ← s · h<sub>t</sub>. 
+    This reduces the magnitude of the current representation, which typically reduces the entropy 
+    of the downstream logit distribution and pulls the model toward its modal behavior. 
+    The mechanism is simple and its effects are legible — a deliberate choice given that 
+    the controller is a research instrument, not a production component.
+  </p>
+
+  <h3>Shadow Mode</h3>
+  <p>
+    When <code>--shadow</code> is set, the controller observes and logs its decisions 
+    but does not apply the scaling hook. This allows calibration of threshold and weight 
+    parameters on a given model and prompt distribution before active deployment. 
+    The separation of observation and actuation is explicit in the code:
+    <code>if (scale_used &lt; 1.0) and (not shadow): hook.set_active(True)</code>.
+  </p>
+</section>
+
+<section>
+  <h2><span class="sec-num">§10</span> Experimental Results</h2>
+  <p>
+    We report results from two experiment families on <strong>Qwen2.5-7B-Instruct</strong>
+    using the HuggingFace backend with greedy decoding. All runs used the same prompt, model,
+    layer (−8), and seed (42). The prompt asks the model to first present a common incorrect
+    claim about how airplanes fly, then debunk it — a structure that requires navigating between
+    two competing representational frames, making it a useful stress test for trajectory stability.
+  </p>
+  <p>
+    The first family uses <strong>System4</strong> (closed-loop adaptive controller) across
+    three proportionally-scaled controller configurations. The second uses <strong>V2</strong>
+    (open-loop deterministic intervention engine) across three fixed intervention magnitudes
+    applied to tokens 1–80, branching from an identical SeedCache.
+  </p>
+
+  <h3>Experiment 1: System4 Controller Sweep</h3>
+  <p>
+    Three System4 configurations were run with proportionally scaled warning and critical
+    response levels — the entire controller response curve shifts with each configuration,
+    not just the warning level.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Config hash</th><th>scale_warn</th><th>scale_crit</th><th>Avg Div</th><th>Avg Score</th><th>WARNING</th><th>CRITICAL</th><th>COOLDOWN</th><th>Interv %</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>6572af32</code></td><td>0.90</td><td>0.75</td><td>0.714</td><td>0.535</td><td>24</td><td>0</td><td>69</td><td>57.5%</td></tr>
+        <tr><td><code>7023307f</code></td><td>0.70</td><td>0.55</td><td>0.703</td><td>0.530</td><td>22</td><td>0</td><td>66</td><td>55.0%</td></tr>
+        <tr><td><code>00c9f8c0</code></td><td>0.40</td><td>0.25</td><td>0.784</td><td>0.593</td><td>33</td><td>0</td><td>97</td><td>80.6%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    The 0.90 and 0.70 configurations behave nearly identically. The 0.40 configuration is a
+    different regime: higher average divergence, 50% more WARNING triggers, 97 COOLDOWN tokens
+    versus ~67, and 80.6% intervention rate versus ~56%. More aggressive damping produced
+    more instability signal, not less.
+  </p>
+  <p>
+    The output text across the three runs reveals the most striking result. Same prompt, same seed,
+    same greedy decoding — three different incorrect claims:
+  </p>
+
+  <div class="diagram">
+<pre style="background:none;border:none;padding:0;margin:0;font-size:0.75rem;">
+<span class="d-accent">scale=0.90</span>  "air on top of wing moves faster... pressure difference lifts the plane"
+            <span class="d-dim">equal transit-time myth (standard textbook error)</span>
+
+<span class="d-warn">scale=0.70</span>  "shape of wing creates a vacuum on top surface, which generates lift"
+            <span class="d-dim">vacuum myth — different framing, numbered list output format</span>
+
+<span class="d-warn">scale=0.40</span>  "pressure of air is lower on top than bottom, creating net upward force"
+            <span class="d-dim">pressure-only myth — formal prose, different structural organization</span></pre>
+  </div>
+
+  <p>
+    Controller aggressiveness is directly correlated with which attractor the model lands in.
+    Each misconception represents a different region of the model's generation landscape —
+    the controller's response curve determines which basin the trajectory settles into
+    from identical starting conditions.
+  </p>
+
+  <h3>Phase Behavior (System4, s=0.90)</h3>
+  <p>
+    Dividing the 0.90 run into thirds reveals clear phase structure:
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Phase</th><th>Tokens</th><th>Intervention Rate</th><th>Mean Divergence</th></tr></thead>
+      <tbody>
+        <tr><td>Early — incorrect claim</td><td>0–53</td><td>67.9%</td><td>0.730</td></tr>
+        <tr><td>Mid — debunking</td><td>54–106</td><td>71.7%</td><td>0.746</td></tr>
+        <tr><td>Late — correct explanation</td><td>107–159</td><td>33.3%</td><td>0.667</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    Intervention rate drops from ~70% to 33% in the late phase, coinciding with the model
+    settling into the stable correct-explanation frame. The trajectory becomes more locally
+    predictable once the model is no longer navigating a representational frame transition.
+  </p>
+
+  <h3>Divergence Spikes at Structural Boundaries</h3>
+  <p>
+    The highest-divergence tokens cluster reproducibly at paragraph and section boundaries
+    across all three System4 runs — the seams where the model shifts representational frame:
+  </p>
+
+  <div class="diagram">
+<pre style="background:none;border:none;padding:0;margin:0;font-size:0.75rem;">
+t= 32  '.
+
+'    div=<span class="d-warn">1.018</span>  WARNING   end of incorrect claim paragraph
+t= 33  'De'      div=<span class="d-warn">1.128</span>  COOLDOWN  start of "Debunking:" — run peak
+t= 84  '.'       div=<span class="d-warn">1.085</span>  WARNING   end of debunking paragraph
+t=103  '.
+
+'   div=<span class="d-warn">1.022</span>  WARNING   boundary before "Correct explanation"
+t=104  'Correct' div=<span class="d-warn">1.120</span>  COOLDOWN  section header token</pre>
+  </div>
+
+  <p>
+    The VAR(1) predictor detects frame transitions as trajectory instability — the hidden
+    dynamics at paragraph boundaries are locally unpredictable relative to the preceding window.
+    This motivates an open question: can structural discontinuities (paragraph breaks, topic shifts)
+    be distinguished from pathological ones (factual drift, behavioral instability)?
+    The current controller treats both identically.
+  </p>
+
+  <h3>Experiment 2: V2 Open-Loop Intervention Sweep</h3>
+  <p>
+    Three V2 runs applied fixed scaling interventions to tokens 1–80. Both branches started
+    from an identical SeedCache — verified by matching hidden norm and entropy at t=0.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Magnitude</th><th>Dev. During</th><th>Recovery After</th><th>Final Distance</th><th>Recovery Ratio</th><th>Token Match</th><th>Regime</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>0.90</td><td>0.169</td><td>−0.224</td><td>0.393</td><td>−1.331</td><td>31.2%</td><td>DIVERGENT</td></tr>
+        <tr><td>0.70</td><td>0.466</td><td>−0.094</td><td>0.560</td><td>−0.202</td><td>5.6%</td><td>DIVERGENT</td></tr>
+        <tr><td>0.40</td><td>0.494</td><td>+0.054</td><td>0.440</td><td>+0.108</td><td>5.6%</td><td>PLASTIC</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    All three produced persistent branch separation — logit JS divergence at final token
+    approaches 1.0 in every run. None recovered to baseline. The 0.90 result is the most
+    counterintuitive: smallest deviation <em>during</em> the intervention (0.169) but most
+    divergent overall (recovery ratio −1.331). The post-intervention branch continued moving
+    away from baseline after the perturbation ended. The 0.40 run is the only one with even
+    marginal recovery (PLASTIC, ratio +0.108).
+  </p>
+
+  <h3>Hidden State Norm Collapse and Snapback</h3>
+  <p>
+    The 0.40 V2 run reveals the internal mechanism. During intervention (t=1–80),
+    the intervention branch operates at roughly one-third of baseline hidden norm —
+    then snaps back the instant the intervention ends:
+  </p>
+
+  <div class="diagram">
+<pre style="background:none;border:none;padding:0;margin:0;font-size:0.75rem;">
+<span class="d-dim">Baseline norm throughout:       ~112–138</span>
+<span class="d-warn">Intervention norm (t=1–80):     ~35–68  (~40% of baseline)</span>
+<span class="d-accent">Post-intervention (t=81+):      ~116–134 (recovered, overshooting)</span>
+
+t=80  base=117.0  intv= 45.8  <span class="d-dim">last intervention token</span>
+t=81  base=122.5  intv=116.5  <span class="d-accent">intervention ends: norm doubles in one step</span>
+t=82  base=124.5  intv=133.0  <span class="d-dim">overshoots baseline, divergence continues</span></pre>
+  </div>
+
+  <p>
+    The snapback is not gradual. Hidden norm jumps from 45.8 to 116.5 in a single token,
+    then overshoots to 133. The model's natural representational scale reasserts immediately,
+    but the trajectory established during the compressed phase propagates forward at full
+    magnitude. The model does not reorient toward baseline — it continues the compressed-phase
+    content path with recovered energy.
+  </p>
+
+  <h3>High Certainty Under Compression</h3>
+  <p>
+    A counterintuitive finding: the compressed low-norm state produces <em>higher</em>
+    next-token confidence than baseline at many positions:
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Token</th><th>Baseline top-1 prob</th><th>Intervention top-1 prob</th></tr></thead>
+      <tbody>
+        <tr><td>t=10</td><td>0.221</td><td><strong>0.870</strong></td></tr>
+        <tr><td>t=20</td><td>0.381</td><td><strong>0.906</strong></td></tr>
+        <tr><td>t=40</td><td>0.695</td><td><strong>0.9999</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    The intervention branch generates with near-total local certainty while following
+    a globally different content path. This is consistent with the model having settled into
+    an alternate attractor basin with its own stable local dynamics — not a destabilized state,
+    but a different stable state.
+  </p>
+
+  <h3>Summary</h3>
+  <p>
+    The central finding across both experiments: <strong>the relationship between intervention
+    magnitude and outcome is nonlinear.</strong> In V2, 0.90 produced more post-intervention
+    divergence than 0.40. In System4, 0.40 produced more instability signal than 0.90.
+    The model's generation dynamics have structure — stable basins, transition zones,
+    and alternate attractors. Intervention outcomes depend on which basin the trajectory
+    is pushed into, not simply on intervention strength.
+  </p>
+
+  <div class="callout callout-green">
+    <p>
+      <strong>Key finding:</strong> Same prompt. Same seed. Same greedy decoding.
+      Three different incorrect claims under three controller configurations.
+      Controller aggressiveness determines which attractor the model settles into.
+      This is the generation landscape made visible.
+    </p>
+  </div></section>
+
+<section>
+  <h2><span class="sec-num">§11</span> Reproducibility Infrastructure</h2>
+  <p>
+    Observer is designed to produce artifacts that can support publishable claims, 
+    not just exploratory analysis.
+  </p>
+  <p>
+    Every run produces a <strong>config hash</strong> (SHA-256 of the full experiment configuration, 
+    sorted-key JSON) and a <strong>seed cache fingerprint</strong> (statistics of the first-layer 
+    key cache). These allow reconstruction of run identity and verification that two runs claiming 
+    to share a branchpoint actually do. The full experiment configuration, trajectory data, 
+    and computed metrics are written to structured JSON artifacts for every run.
+  </p>
+  <p>
+    The included <code>REPRODUCIBILITY.md</code> specifies a reporting checklist for public claims: 
+    pin commit hash in every figure caption; report model key, backend, seed, and intervention settings; 
+    run at least 3 seeds per comparison; report mean + confidence interval, not best run; 
+    publish raw <code>results.json</code> used for plots. This is the standard that is routinely 
+    absent from published intervention work.
+  </p>
+  <p>
+    The CI workflow checks compile integrity across all four modules on every push. 
+    No runtime tests yet — adding integration tests that verify the baseline/intervention 
+    branches actually diverge under large perturbation is the next engineering priority.
+  </p>
+</section>
+
+<section>
+  <h2><span class="sec-num">§12</span> Limitations and Open Questions</h2>
+  <p>
+    Several significant limitations constrain the current system's claims.
+  </p>
+  <p>
+    <strong>Greedy decoding only.</strong> All generation uses argmax token selection. 
+    Temperature > 0 is where much of the interesting instability behavior surfaces in practice. 
+    Extending to sampled generation is straightforward but changes the interpretation of 
+    trajectory divergence (which now has a stochastic component).
+  </p>
+  <p>
+    <strong>Asserted controller weights.</strong> The 70/15/10/5 weighting in the composite score 
+    is a design choice, not derived from empirical optimization. Whether these weights are 
+    well-calibrated for the phenomena of interest is unknown.
+  </p>
+  <p>
+    <strong>Downstream validity.</strong> The divergence signal measures trajectory instability. 
+    Whether trajectory instability correlates with practically important failure modes — 
+    hallucination, factual drift, behavioral misalignment — is an open empirical question. 
+    The instrumentation is built to investigate this question; it does not answer it.
+  </p>
+  <p>
+    <strong>Architecture coverage.</strong> Layer discovery currently handles Llama/Qwen-style 
+    (<code>model.model.layers</code>), GPT-2/GPT-J (<code>transformer.h</code>), 
+    GPT-NeoX (<code>gpt_neox.layers</code>), and encoder-decoder (<code>model.decoder.layers</code>). 
+    Falcon, Mistral (sliding window attention), Gemma, Phi, and Mamba would require additional handling.
+  </p>
+  <p>
+    <strong>VAR(1) window constraints.</strong> With window size 8, the VAR(1) model is fit on 
+    7 transitions in 64-dimensional space. The ridge regularization (λ=0.01) stabilizes the 
+    regression, but the statistical power of the prediction error signal is limited, particularly 
+    in the first few tokens before the window fills.
+  </p>
+</section>
+
+<section>
+  <h2><span class="sec-num">§13</span> Conclusion</h2>
+  <p>
+    Observer is an attempt to build the experimental protocol layer that interpretability 
+    research has so far deferred. The field has made substantial progress understanding what 
+    models compute; it has invested comparatively little in understanding the dynamics of 
+    that computation — whether generation is stable, whether perturbations persist, 
+    whether recovery can be induced.
+  </p>
+  <p>
+    The control theory framing is intentional. An observer in the control engineering sense 
+    is a system that estimates internal state from external outputs in real time. That is 
+    precisely what this stack attempts: not to analyze model internals post-hoc, 
+    but to maintain a running estimate of trajectory health and act on it.
+  </p>
+  <p>
+    Whether the field moves toward runtime use of interpretability infrastructure, 
+    rather than post-hoc analysis, will determine whether this direction matters. 
+    The bet embedded in observer is that it will — and that when it does, 
+    the absence of rigorous branchpoint design and recovery measurement in the existing toolkit 
+    will look like an obvious gap in retrospect.
+  </p>
+</section>
+
+<div class="footnotes">
+  <p>Repository: <a href="https://github.com/aeon0199/llm-stability-runtime">github.com/aeon0199/llm-stability-runtime</a></p>
+  <p style="margin-top:0.5rem;">License: MIT. Cite via CITATION.cff.</p>
+  <p style="margin-top:0.5rem;">
+    References: Nanda et al. (2022) TransformerLens. Wu et al. (2024) pyvene. 
+    Zou et al. (2023) Representation Engineering. Li et al. (2023) Inference-Time Intervention. 
+    Johnson & Lindenstrauss (1984) Extensions of Lipschitz mappings into a Hilbert space.
+  </p>
+</div>
+
+</body>
+</html>
