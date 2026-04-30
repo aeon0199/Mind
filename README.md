@@ -1,10 +1,10 @@
 # observer
 
-Closed-loop stability control for language model inference.
+Runtime research lab for language-model trajectory mapping, perturbation testing, and control experiments.
 
-Most interpretability tools show you what's inside a model. Observer is built around a different question: **can you measure when generation is destabilizing — and correct it in real time?**
+Most interpretability tools show you what's inside a model. Observer is built around a different question: **can you measure how generation trajectories move, branch, persist, and respond to perturbation at token time?**
 
-This is not another activation visualization toolkit. It's a runtime control stack.
+This is not another activation visualization toolkit. It's a runtime instrument for observability, deterministic intervention comparisons, and controller research.
 
 ## Read The Paper First
 
@@ -26,18 +26,28 @@ This is not another activation visualization toolkit. It's a runtime control sta
 
 This project was built by an independent researcher without formal ML or software engineering training, with no prior programming experience, through iterative collaboration with AI assistants and rented compute. Full context is in `docs/observer_paper.html`.
 
+## Current Status
+
+Observer is in **Phase 2: mapping**. The original closed-loop controller thesis is paused after the controller arc showed that the first trigger was not measuring what we thought it was. The active program now maps branchpoint geometry, perturbation propagation, and basin behavior in Qwen3-1.7B.
+
+Start with:
+
+- `RESEARCH.md` for the active mapping program and next experiment.
+- `RESEARCH_CONTROLLER.md` for the archived controller evidence.
+- `docs/RESEARCH_WORKFLOW.md` for the experiment handoff discipline.
+
 ---
 
 ## What This Does
 
-Observer instruments autoregressive generation at the token level, runs a streaming divergence predictor against the model's hidden trajectory, and closes the loop with a proportional controller that can apply targeted interventions — all during a single forward pass.
+Observer instruments autoregressive generation at the token level, records hidden-trajectory diagnostics, runs deterministic baseline-vs-intervention comparisons, and can still run closed-loop controller experiments when the research question calls for it.
 
 Four protocol layers, each independently usable:
 
 - **Hysteresis protocol** — `BASE → PERTURB → REASK`: does perturbation memory persist after the perturbation is removed? Answers the question that jailbreak and context-drift research rarely asks directly.
 - **Observability runner** — single-pass token-level telemetry: divergence, spectral diagnostics, layer stiffness, windowed SVD. No branching, no intervention. Just signal.
 - **Intervention engine** — deterministic baseline-vs-intervention comparison via `SeedCache`: both branches run from an identical prompt-pass snapshot. Eliminates RNG and attention-mask confounds that most published intervention papers don't control for.
-- **Adaptive controller** — closed-loop. Divergence signal drives proportional damping in real time. Shadow mode for calibration before active deployment.
+- **Adaptive controller** — closed-loop research mode. Shadow mode and active interventions are available, but the original controller design is archived rather than treated as validated.
 
 ---
 
@@ -68,18 +78,13 @@ pip install -r requirements.txt
 ```
 
 ```bash
-# 1) Hysteresis protocol
-python baseline_hysteresis_v1/runner.py observer \
+# 1) Passive observability run
+python -m runtime_lab.cli.main observe \
   --prompt "Explain how airplanes fly." \
-  --max-new-tokens 128
+  --max-tokens 128
 
-# 2) Observability run with streaming diagnostics
-python v1.5/V1.5_runner.py \
-  --prompt "Explain how airplanes fly." \
-  --max_new_tokens 128
-
-# 3) Deterministic intervention stress test
-python intervention_engine_v1.5_v2/intervention.py run \
+# 2) Deterministic intervention stress test
+python -m runtime_lab.cli.main stress \
   --prompt "Explain how airplanes fly." \
   --max-tokens 64 \
   --layer -1 \
@@ -88,9 +93,10 @@ python intervention_engine_v1.5_v2/intervention.py run \
   --start 5 \
   --duration 10
 
-# 4) Closed-loop adaptive control (shadow mode)
-python adaptive_controller_system4/adaptive_runner.py control \
+# 3) Closed-loop adaptive control (shadow mode)
+python -m runtime_lab.cli.main control \
   --prompt "Explain how airplanes fly." \
+  --type additive \
   --shadow
 ```
 
@@ -104,7 +110,7 @@ pip install -r requirements-optional.txt
 
 ```bash
 # NNsight backend (remote execution support)
-python intervention_engine_v1.5_v2/intervention.py run \
+python -m runtime_lab.cli.main stress \
   --backend nnsight \
   --nnsight-remote \
   --prompt "Explain how airplanes fly." \
@@ -113,7 +119,7 @@ python intervention_engine_v1.5_v2/intervention.py run \
   --magnitude 0.9
 
 # SAE feature steering
-python intervention_engine_v1.5_v2/intervention.py run \
+python -m runtime_lab.cli.main stress \
   --prompt "Explain how airplanes fly." \
   --type sae \
   --layer -1 \
@@ -122,7 +128,7 @@ python intervention_engine_v1.5_v2/intervention.py run \
   --sae-strength 5.0
 
 # Adaptive controller with SAE + live dashboard
-python adaptive_controller_system4/adaptive_loop.py \
+python -m runtime_lab.cli.main control \
   --prompt "Explain how airplanes fly." \
   --type sae \
   --sae-repo "apollo-research/llama-3.1-70b-sae" \
@@ -185,10 +191,14 @@ Contributions toward that roadmap are welcome: downstream correlation, attractor
 ## Project Layout
 
 ```
-baseline_hysteresis_v1/      hysteresis protocol
-v1.5/                        observability runner + diagnostics
-intervention_engine_v1.5_v2/ deterministic intervention engine
-adaptive_controller_system4/ closed-loop adaptive controller
+src/runtime_lab/             active implementation and unified CLI
+scripts/                     offline analyzers, daemon, and local dashboards
+runs/                        local run artifacts (ignored by git)
+docs/                        research workflow and paper assets
+baseline_hysteresis_v1/      legacy hysteresis prototype
+v1.5/                        legacy observability prototype
+intervention_engine_v1.5_v2/ legacy intervention prototype
+adaptive_controller_system4/ legacy controller prototype
 ```
 
 ---

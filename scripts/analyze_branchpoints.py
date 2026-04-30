@@ -16,6 +16,7 @@ import numpy as np
 
 
 TIMESTAMP_RE = re.compile(r"control_run_(\d{8})_(\d{6})")
+DEFAULT_MIN_VALID_PAIRS = 5
 
 
 @dataclass
@@ -651,7 +652,7 @@ def _print_analysis(results: Dict[str, Any], args: argparse.Namespace) -> None:
     )
 
 
-def main() -> None:
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Offline branchpoint analysis for Observer control runs.")
     parser.add_argument("--runs-dir", default="runs")
     parser.add_argument("--model", default=None)
@@ -662,13 +663,27 @@ def main() -> None:
     parser.add_argument("--additive-direction", default=None)
     parser.add_argument("--additive-reference", default=None)
     parser.add_argument("--min-tokens", type=int, default=10)
-    parser.add_argument("--min-valid-pairs", type=int, default=20)
+    parser.add_argument(
+        "--min-valid-pairs",
+        type=int,
+        default=DEFAULT_MIN_VALID_PAIRS,
+        help=(
+            "Minimum aligned shadow/active pairs required before fitting. "
+            "Default matches the smallest accepted Q1 per-prompt slice; raise "
+            "this for broader analyses."
+        ),
+    )
     parser.add_argument("--min-feature-coverage", type=float, default=0.5)
     parser.add_argument("--train-frac", type=float, default=0.8)
     parser.add_argument("--stop-auroc", type=float, default=0.8)
     parser.add_argument("--top-n", type=int, default=12)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--json-out", default=None)
+    return parser
+
+
+def main() -> None:
+    parser = build_arg_parser()
     args = parser.parse_args()
 
     runs_dir = Path(args.runs_dir)
@@ -679,7 +694,7 @@ def main() -> None:
     if len(pairs) < args.min_valid_pairs:
         raise SystemExit(
             f"Only {len(pairs)} valid pairs found; minimum required is {args.min_valid_pairs}. "
-            "M1.1 should stop here and queue M1.2."
+            "Use a broader slice or collect more matched runs before claiming the result."
         )
 
     results = _analyze_pairs(pairs, args)
