@@ -15,5 +15,3 @@ __pycache__/
 # Run artifacts
 runs/
 artifacts/
-
-/v1.5 t/

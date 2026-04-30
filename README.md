@@ -192,14 +192,20 @@ Contributions toward that roadmap are welcome: downstream correlation, attractor
 
 ```
 src/runtime_lab/             active implementation and unified CLI
-scripts/                     offline analyzers, daemon, and local dashboards
+scripts/                     offline analyzers, warm-model daemon, console
+tests/                       guard tests (CLI parsing, doc/CI hygiene)
 runs/                        local run artifacts (ignored by git)
-docs/                        research workflow and paper assets
-baseline_hysteresis_v1/      legacy hysteresis prototype
-v1.5/                        legacy observability prototype
-intervention_engine_v1.5_v2/ legacy intervention prototype
-adaptive_controller_system4/ legacy controller prototype
+docs/                        paper, workflow note, assets
+RESEARCH.md                  active mapping program (Phase 2)
+RESEARCH_CONTROLLER.md       archived controller arc (Phase 1, F1–F29)
+baseline_hysteresis_v1/      legacy v1 hysteresis prototype (historical)
+v1.5/                        legacy v1.5 observability prototype (historical)
+intervention_engine_v1.5_v2/ legacy v2 intervention prototype (historical)
+adaptive_controller_system4/ legacy controller prototype (historical)
 ```
+
+The `legacy v*` directories are kept for reproducing v1-paper results and as
+historical reference. New work goes in `src/runtime_lab/`.
 
 ---
 
@@ -208,14 +214,20 @@ adaptive_controller_system4/ legacy controller prototype
 ```bibtex
 @software{malone2026observer,
   author = {Malone, Josh},
-  title  = {observer: Closed-loop stability control for language model inference},
+  title  = {observer: Runtime Instrumentation for Trajectory Mapping in Language Models},
   year   = {2026},
-  url    = {https://github.com/aeon0199/observer}
+  version = {0.2.0},
+  url    = {https://github.com/aeon0199/observer},
+  note   = {v2 preprint: https://aeon0199.github.io/observer/observer_paper.html}
 }
 ```
 
-Or cite via `CITATION.cff`.
-If citing experimental results or divergence-signal methodology, cite `docs/observer_paper.html` directly.
+Or cite via `CITATION.cff`. The current preprint is the v2 paper at
+[`docs/observer_paper.html`](docs/observer_paper.html) (also hosted at
+<https://aeon0199.github.io/observer/observer_paper.html>). v1 (February 2026,
+"Closed-Loop Stability Control...") is superseded but preserved in git history;
+its central claim was falsified in v2 — see paper §10 and `RESEARCH_CONTROLLER.md`
+for the full evidence chain.
 
 ---
 

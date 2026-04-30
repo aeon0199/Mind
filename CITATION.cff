@@ -6,6 +6,20 @@ authors:
   - family-names: "Malone"
     given-names: "Josh"
 repository-code: "https://github.com/aeon0199/observer"
+url: "https://aeon0199.github.io/observer/observer_paper.html"
 license: "MIT"
-version: "0.1.0"
-date-released: "2026-02-18"
+version: "0.2.0"
+date-released: "2026-04-30"
+preferred-citation:
+  type: article
+  title: "observer: Runtime Instrumentation for Trajectory Mapping in Language Models"
+  authors:
+    - family-names: "Malone"
+      given-names: "Josh"
+  year: 2026
+  url: "https://aeon0199.github.io/observer/observer_paper.html"
+  notes: |
+    v2 preprint (April 2026). Supersedes v1 ("Closed-Loop Stability Control for
+    Language Model Inference", February 2026) — the v1 controller thesis was
+    falsified on Qwen3-1.7B; v2 reports the falsification arc and a positive
+    branchpoint hijacking finding (within-model AUROC 0.82-0.86, see paper §11).
