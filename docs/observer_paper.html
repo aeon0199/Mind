@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>observer: Closed-Loop Stability Control for Language Model Inference</title>
+<title>observer: Runtime Instrumentation for Trajectory Mapping in Language Models</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <style>
@@ -474,13 +474,13 @@
 
 <header class="paper-header">
   <div class="label-row">
-    <span class="label">Preprint</span>
-    <span class="label-plain">February 2026</span>
+    <span class="label">Preprint · v2</span>
+    <span class="label-plain">v1 February 2026 · v2 April 2026</span>
   </div>
-  <h1><em>observer</em>: Closed-Loop Stability Control<br>for Language Model Inference</h1>
+  <h1><em>observer</em>: Runtime Instrumentation for<br>Trajectory Mapping in Language Models</h1>
   <p class="subtitle">
-    A runtime instrumentation stack for measuring perturbation dynamics, 
-    quantifying recovery behavior, and applying proportional damping 
+    A runtime instrumentation stack for measuring perturbation dynamics, characterizing
+    branchpoint geometry, and conducting falsifiable closed-loop control experiments
     during autoregressive generation — without modifying model weights.
   </p>
   <div class="meta-row">
@@ -490,21 +490,69 @@
   </div>
 </header>
 
+<div class="callout callout-green" style="margin-bottom: 2.5rem;">
+  <p>
+    <strong>v2 update (2026-04-19).</strong> The first version of this paper presented
+    closed-loop stability control as the central contribution. Subsequent experiments
+    falsified the original controller thesis on Qwen3-1.7B: scaling interventions at
+    the final layer have zero effect (absorbed by RMSNorm), additive interventions are
+    either silent no-ops or over-actuating depending on magnitude, and acting earlier
+    in the residual stream cascades destructively. Most fundamentally, the
+    divergence signal that drives the controller was found to measure token-level prose
+    surprise — word-starts, semantic transitions, structural boundaries — rather
+    than dynamical instability in any control-theoretic sense.
+  </p>
+  <p>
+    What survives is the instrument. The deterministic branchpoint design, the
+    hysteresis protocol, the per-token telemetry, and the intervention engine all
+    work as designed. Building on that instrument, we report a new positive result:
+    a <strong>branchpoint hijacking</strong> phenomenon in which final-layer additive
+    perturbations can flip individual tokens at predictable trajectory positions, with
+    a within-model classifier achieving held-out AUROC of 0.82–0.86 on Qwen3-1.7B.
+    The mechanism generalizes architecturally; the consequences (whether the resulting
+    trajectory lands in a better or worse basin) are model-specific.
+  </p>
+  <p>
+    Sections rewritten in v2: §6 (spectral diagnostics, methodology corrected), §9
+    (controller empirical evaluation, replaced with falsification arc), §10
+    (experimental results, replaced with the Qwen3-1.7B controller arc), §11 (new —
+    branchpoint hijacking), §12 (new — mapping program), §14 (limitations updated),
+    §15 (conclusion rewritten). Sections preserved largely as written: §3 architecture,
+    §4 SeedCache, §5 divergence signal mechanics, §7 hysteresis protocol, §8
+    intervention engine, §13 reproducibility infrastructure.
+  </p>
+</div>
+
 <div class="abstract">
   <div class="abstract-label">Abstract</div>
   <p>
-    We present <strong>observer</strong>, an open-source runtime stack for inference-time stability research on autoregressive language models. 
-    The field has invested heavily in understanding model internals — circuit discovery, feature visualization, activation steering — 
-    but comparatively little work addresses behavioral stability during generation: how perturbations propagate through 
-    the hidden trajectory, whether models recover from them, and whether recovery can be induced in real time.
-    Observer addresses this gap through four independently usable protocol layers: a three-stage hysteresis protocol 
-    for measuring perturbation persistence, a single-pass observability runner with streaming diagnostics, 
-    a deterministic intervention engine built around a <em>SeedCache</em> branchpoint design that eliminates 
-    common confounds in intervention experiments, and a closed-loop adaptive controller that applies proportional 
-    damping in response to a per-token divergence signal. The divergence signal is derived from a VAR(1) model 
-    fit on projected hidden states, providing a held-out one-step prediction error that captures local trajectory 
-    instability before it manifests in model output. We describe the architecture, the experimental protocols, 
-    and the design decisions that distinguish this approach from existing interpretability tooling.
+    We present <strong>observer</strong>, an open-source runtime stack for studying
+    perturbation dynamics in autoregressive language models. The system provides four
+    independently usable protocol layers: a three-stage hysteresis protocol for
+    measuring perturbation persistence, a single-pass observability runner with
+    streaming diagnostics, a deterministic intervention engine built around a
+    <em>SeedCache</em> branchpoint design that eliminates common confounds in
+    intervention experiments, and a closed-loop adaptive controller that applies
+    proportional damping in response to a per-token divergence signal. The divergence
+    signal is derived from a VAR(1) model fit on projected hidden states, providing a
+    held-out one-step prediction error.
+  </p>
+  <p>
+    We use this instrument to falsify our own initial closed-loop stability control
+    hypothesis on Qwen3-1.7B and report what the experiments actually showed: the
+    divergence signal correlates with token-level prose surprise (word-starts,
+    structural boundaries, semantic transitions) rather than dynamical instability in
+    a control-theoretic sense. Closed-loop control over this signal is not effective
+    on the tested model. We then report a positive finding that emerged from the same
+    apparatus: a <strong>branchpoint hijacking</strong> phenomenon in which
+    final-layer additive perturbations can flip individual tokens at predictable
+    positions, characterized by a within-model classifier achieving AUROC 0.82 on a
+    procedural prompt and 0.86 on a descriptive prompt (Qwen3-1.7B, held-out
+    pair-level evaluation). The classifier's predictive features differ between
+    prompt classes, suggesting prompt-class-dependent trajectory geometry. We
+    describe the architecture, the experimental protocols, the falsification arc, and
+    a mapping program organized around three open questions with explicit stop
+    conditions and controller-return criteria.
   </p>
 </div>
 
@@ -534,9 +582,17 @@
 
   <div class="callout callout-green">
     <p>
-      <strong>Scope caveat:</strong> Observer is a research instrument. The divergence signal measures 
-      trajectory instability — it is not a proven hallucination detector. The controller is a proportional 
-      brake, not a proven safety layer. Empirical validation of downstream correlates is the necessary next step.
+      <strong>Scope caveat (v1, retained for context):</strong> Observer was framed as a
+      research instrument. The original paper hedged that the divergence signal measured
+      trajectory instability and that empirical validation of downstream correlates was
+      "the necessary next step."
+    </p>
+    <p>
+      <strong>Update (v2):</strong> we performed that validation. The divergence signal
+      does not measure dynamical instability in the control-theoretic sense it was
+      framed as measuring; it measures token-level prose surprise. See §10 for the
+      falsification arc and §11 for the positive finding (branchpoint hijacking)
+      that emerged from the same apparatus.
     </p>
   </div>
 </section>
@@ -836,12 +892,34 @@ intervention_cache = seed_cache.clone()
   </p>
 
   <h3>Spectral Diagnostics</h3>
+
+  <div class="callout callout-green">
+    <p>
+      <strong>v2 correction.</strong> The original spectral module FFT'd the flattened
+      hidden-state vector along the feature-index axis and reported entropy, flatness,
+      centroid, and band fractions over that spectrum. The v1 paper acknowledged that
+      "the feature index is not a temporal axis" but defended the metrics as a stable
+      characterization of activation energy distribution. This defense does not survive
+      a permutation test: neuron ordering in transformer hidden states is arbitrary
+      (a function of weight initialization, not semantics), and any neuron-axis FFT
+      summary is a function of that arbitrary ordering. Permuting neurons changes every
+      reported metric; the underlying activation is unchanged.
+    </p>
+    <p>
+      The v2 implementation rewrites this module as a token-time spectral probe:
+      hidden states are accumulated into a sliding window of shape <code>[T, D]</code>
+      and the FFT is taken along the time axis (dim=0). Per-frequency power is then
+      averaged across the D dimensions, producing a scalar trajectory spectrum. This
+      captures real structure — slow drift vs. high-frequency oscillation in
+      activation patterns across generation steps — and is invariant to neuron
+      permutation. A built-in self-test reports a non-zero permutation-change ratio
+      whenever the window has at least 8 tokens, confirming the time axis is in fact
+      what's being analyzed.
+    </p>
+  </div>
+
   <p>
-    The hidden state vector is treated as a 1D signal over its feature index and subjected to 
-    an FFT-based analysis. This is not a claim about physical frequency structure — 
-    the feature index is not a temporal axis. Rather, it provides a stable, 
-    cheap characterization of whether activation energy is concentrated in a narrow band or 
-    spread broadly across dimensions. The metrics extracted are:
+    The corrected metrics, computed on the time-axis trajectory spectrum, are:
   </p>
 
   <div class="table-wrap">
@@ -850,14 +928,22 @@ intervention_cache = seed_cache.clone()
         <tr><th>Metric</th><th>Description</th></tr>
       </thead>
       <tbody>
-        <tr><td><code>spectral_entropy</code></td><td>Normalized Shannon entropy of the power spectrum. High = diffuse energy distribution.</td></tr>
-        <tr><td><code>spectral_flatness</code></td><td>Geometric mean / arithmetic mean of power. Approaches 1.0 for white noise, 0.0 for pure tones.</td></tr>
-        <tr><td><code>centroid</code></td><td>Normalized frequency centroid ∈ [0,1]. High centroid = energy concentrated at high spatial frequencies.</td></tr>
-        <tr><td><code>high_frac</code></td><td>Fraction of power in the top 20% of frequency bins. Proxy for fine-grained activation roughness.</td></tr>
+        <tr><td><code>spectral_entropy</code></td><td>Normalized Shannon entropy of the time-axis power spectrum. High = energy spread across slow and fast trajectory frequencies.</td></tr>
+        <tr><td><code>spectral_flatness</code></td><td>Geometric mean / arithmetic mean of power. Approaches 1.0 for white-noise trajectories, 0.0 for tonally pure ones.</td></tr>
+        <tr><td><code>centroid</code></td><td>Normalized frequency centroid ∈ [0,1]. High centroid = trajectory dominated by step-to-step oscillation rather than slow drift.</td></tr>
+        <tr><td><code>high_frac</code></td><td>Fraction of power in the upper 20% of trajectory frequencies.</td></tr>
         <tr><td><code>rolloff_85</code></td><td>Normalized frequency below which 85% of cumulative power falls.</td></tr>
+        <tr><td><code>permutation_change</code></td><td><em>(new in v2)</em> Self-test ratio comparing the spectrum of the actual trajectory to the spectrum of a randomly time-permuted version of the same window. Should be > 0 — confirms time-axis behavior. If a future regression makes this near zero we know the module has reverted to neuron-axis behavior.</td></tr>
       </tbody>
     </table>
   </div>
+
+  <p>
+    Empirically, <code>permutation_change</code> turned out to be the strongest single
+    feature for predicting branchpoint flippability on Qwen3-1.7B in §11.5 — a feature
+    that was conceived as a methodology self-test ended up carrying real signal about
+    trajectory geometry.
+  </p>
 
   <h3>Windowed SVD</h3>
   <p>
@@ -1020,9 +1106,23 @@ Metrics:
 <section>
   <h2><span class="sec-num">§9</span> Adaptive Controller</h2>
   <p>
-    The adaptive controller closes the loop: per-token diagnostics drive a proportional 
+    The adaptive controller closes the loop: per-token diagnostics drive a proportional
     scaling intervention that damps the hidden state when the composite score exceeds a threshold.
   </p>
+
+  <div class="callout callout-green">
+    <p>
+      <strong>v2 status.</strong> The architecture in this section is unchanged from
+      v1, and the implementation runs as described. What changed is the empirical
+      story. The controller is no longer presented as a working component with
+      interesting attractor-selection behavior; it is presented as a falsifiable
+      hypothesis that we falsified. §10 reports the failure modes (silent no-op at
+      L=−1 with scaling, over-actuation at higher additive magnitudes, destructive
+      cascade when acting earlier in the stack). The controller code remains in
+      the repository as research scaffolding for a future redesign — the criteria
+      under which controller research would resume are listed in §11.7.
+    </p>
+  </div>
 
   <h3>Composite Score</h3>
 
@@ -1081,220 +1181,394 @@ Metrics:
 </section>
 
 <section>
-  <h2><span class="sec-num">§10</span> Experimental Results</h2>
+  <h2><span class="sec-num">§10</span> Experimental Results: Controller Arc on Qwen3-1.7B</h2>
+
+  <div class="callout callout-green">
+    <p>
+      <strong>v2 replacement.</strong> The v1 §10 reported two experiment families on
+      Qwen2.5-7B that, in retrospect, lacked controls we now know are required: per-step
+      intervention-applied counts, decoupled measure/act layers, and pair-level
+      shadow/active comparison. The v1 headline ("controller aggressiveness determines
+      which attractor the model lands in") was reported as a controller property but is
+      consistent with two alternative explanations we could not rule out at the time:
+      Qwen2.5-specific scaling behavior, and prompt-seed-specific basin topology
+      independent of the controller. The v1 results are preserved in the repository's
+      <code>RESEARCH_CONTROLLER.md</code> archive for historical context.
+    </p>
+    <p>
+      In v2 we ran a longer arc on Qwen3-1.7B (28 layers) with explicit controls. We
+      report it here in the order the experiments happened, including the negative
+      results, because the negative results determine the structure of the rest of the
+      paper. The model used throughout this section is <strong>Qwen3-1.7B</strong>;
+      generalization to other architectures is treated as out of scope for the current
+      mapping program (one cross-model scope-check is reported in §11.5).
+    </p>
+  </div>
+
+  <h3>F4 — The original closed-loop A/B test</h3>
   <p>
-    We report results from two experiment families on <strong>Qwen2.5-7B-Instruct</strong>
-    using the HuggingFace backend with greedy decoding. All runs used the same prompt, model,
-    layer (−8), and seed (42). The prompt asks the model to first present a common incorrect
-    claim about how airplanes fly, then debunk it — a structure that requires navigating between
-    two competing representational frames, making it a useful stress test for trajectory stability.
-    All experiments were run on a single NVIDIA H200 GPU via RunPod.
-  </p>
-  <p>
-    The first family uses <strong>System4</strong> (closed-loop adaptive controller) across
-    three proportionally-scaled controller configurations. The second uses <strong>V2</strong>
-    (open-loop deterministic intervention engine) across three fixed intervention magnitudes
-    applied to tokens 1–80, branching from an identical SeedCache.
+    On the prompt "Write step-by-step instructions for baking sourdough bread.", the
+    closed-loop controller at its v1 design defaults (act_layer=−1, intervention_type=
+    scaling, scale_warn=0.90, scale_crit=0.75) produced essentially the same per-token
+    divergence as shadow mode. avg_raw_div: 0.765 (shadow) vs 0.768 (active). Warning
+    counts: 8 vs 7. Critical counts: 1 vs 1. With 5 seeds × 1 prompt the difference is
+    well within seed variance. <em>This was the first signal that something in the
+    pipeline did not work as advertised.</em>
   </p>
 
-  <h3>Experiment 1: System4 Controller Sweep</h3>
+  <h3>F17 — Why scaling at the final layer has zero effect</h3>
   <p>
-    Three System4 configurations were run with proportionally scaled warning and critical
-    response levels — the entire controller response curve shifts with each configuration,
-    not just the warning level.
+    A diagnostic stress run isolated the cause. With <code>scale=0.5</code> (halving the
+    final-layer hidden state) we measured logit_kl_mean_during = 0.0000 across 5 seeds.
+    With <code>scale=2.0</code> (doubling), also 0.0000. token_match_rate = 1.000 in
+    both cases. The scaling intervention was a true no-op at L=−1.
+  </p>
+  <p>
+    The mechanism is structural: Qwen3 places an RMSNorm between the last transformer
+    block and the LM head. Scaling the input to that norm by any constant factor is
+    erased — the norm rescales to unit variance, the LM head sees an essentially
+    identical input, and the argmax is unchanged. The closed loop in F4 was firing the
+    controller (the trigger was active), the scaling intervention was applied, and the
+    intervention had no downstream effect. <strong>The closed loop was open at the
+    actuator.</strong>
+  </p>
+
+  <h3>F18 — Additive intervention is the right actuator class at L=−1</h3>
+  <p>
+    A 4-way intervention-type comparison at the same layer (additive, scaling@0.5,
+    scaling@2.0, projection-onto-64-dim-subspace) clarified what does work. Additive
+    perturbation with relative magnitude 1.0 produced
+    <code>logit_kl_mean_during = 10.40 ± 2.78</code> across 5 seeds (DSR = 3.73), with
+    token_match_rate = 0.145 — that is, 85% of generated tokens differed from baseline.
+    Projection produced larger logit shifts but always landed in a runaway regime.
+    Scaling at any magnitude produced exactly zero. The conclusion was that
+    <strong>at L=−1 on Qwen3-1.7B, additive perturbation is the only intervention class
+    that reliably reaches the LM head decision distribution.</strong>
+  </p>
+
+  <h3>F21 — Random additive in a closed loop is net-zero</h3>
+  <p>
+    Returning to the F4 setup with additive replacing scaling and a random seeded
+    direction: shadow vs. active avg_raw_div = 0.6732 vs 0.6728 (Δ = +0.0004 across 5
+    seeds). Per-seed, the active runs split — some flipped a few tokens and improved
+    divergence, others flipped tokens and worsened it. The expected value of a random
+    direction was zero, and that is what the data showed. This was the first direct
+    evidence that the controller's actuator was now reaching the model
+    (token_match_rate ≠ 1.000 on most seeds) but its <em>effect</em> was undirected.
+  </p>
+
+  <h3>F23 / F24 — Drift-opposing direction helps marginally and unreliably</h3>
+  <p>
+    Two follow-up experiments replaced the random additive direction with a drift-
+    opposing one. The implementation maintains a reference hidden state (either an
+    EMA of recent hidden states or a frozen anchor from the first <em>N</em> clean
+    tokens), computes <code>drift = h_current − h_reference</code> at each step,
+    normalizes, and injects <code>−β·drift_direction</code> as the corrective additive
+    delta. The intuition matches a textbook proportional controller pulling toward a
+    setpoint.
+  </p>
+  <p>
+    EMA reference (F23): avg_raw_div 0.6547 vs shadow 0.6732 — a 2.74% improvement,
+    0.106 shadow-stdevs. Anchor reference (F24): 0.6537, an additional 0.001
+    improvement. Both improvements are concentrated in a single seed where the
+    controller's first intervention coincided with a token-flip that diverted the
+    trajectory into a more coherent basin (the F25 phenomenon, characterized below).
+    Other seeds were unchanged or slightly worse.
+  </p>
+
+  <h3>F25 — Branchpoint hijacking: the actual mechanism behind F23/F24's gains</h3>
+  <p>
+    Per-step trace analysis of F23/F24 revealed that the small aggregate improvements
+    were not closed-loop control. On one of the F24 seeds, the controller's first
+    intervention at step 7 flipped a single token (a leading whitespace became "Use"),
+    and the subsequent generation entered an entirely different output basin —
+    a coherent recipe with explicit ingredients ("100g flour, 100g water, 100g…") in
+    place of shadow's degenerate numbered-list stub ("1. Prepare 2. Mix 3. Let…").
+    On other seeds with already-coherent baselines, the controller fired repeatedly,
+    flipped no tokens, and active output was character-identical to shadow.
+  </p>
+  <p>
+    This pattern is reproducible: small final-layer additive perturbations can flip
+    individual tokens at branchpoints where the LM head's top-2 logit margin is small,
+    and the resulting trajectory enters a different attractor. The visible "controller
+    helps" effect is one such hijack landing in a better basin. The visible "controller
+    does nothing" effect is the controller firing in regions where its perturbation is
+    smaller than the local logit margin. <strong>The controller is not stabilizing
+    trajectories. It is occasionally redirecting them at branchpoints, and whether the
+    new basin is better or worse is a property of the basin, not the controller.</strong>
+  </p>
+
+  <h3>F26 — The measurement-layer confound</h3>
+  <p>
+    A first attempt to fix F25 by moving the actuation layer one step back (act_layer
+    = −2) produced what looked like a clean 1.7σ improvement on aggregate avg_raw_div.
+    Inspection of <code>intervention_applied</code> counts in events.jsonl showed the
+    controller fired exactly 1 time across 5 active runs. The "improvement" was
+    entirely an artifact of moving <code>measure_layer</code> from −1 to −2 in the
+    same step (the original implementation required them to be equal). Divergence at
+    L=−2 is naturally lower than at L=−1, and the comparison was apples-to-oranges.
+    The controller was a spectator.
+  </p>
+  <p>
+    Resolving this required a small code change: decouple <code>measure_layer</code>
+    from <code>act_layer</code> in the runtime engine, with separate forward hooks for
+    measurement (capture-only) and actuation (modify). Once decoupled, the layer-move
+    hypothesis could be tested honestly.
+  </p>
+
+  <h3>F27 — Layer-move is falsified once measured correctly</h3>
+  <p>
+    With <code>measure_layer=−1</code> held fixed (identical signal to shadow) and
+    <code>act_layer ∈ {−1, −2, −3}</code>, on the same 5-seed sourdough suite:
   </p>
 
   <div class="table-wrap">
     <table>
-      <thead>
-        <tr><th>Config hash</th><th>scale_warn</th><th>scale_crit</th><th>Avg Div</th><th>Avg Score</th><th>WARNING</th><th>CRITICAL</th><th>COOLDOWN</th><th>Interv %</th></tr>
-      </thead>
+      <thead><tr><th>Cell</th><th>avg_raw_div</th><th>Δ vs shadow</th><th>interventions fired</th></tr></thead>
       <tbody>
-        <tr><td><code>6572af32</code></td><td>0.90</td><td>0.75</td><td>0.714</td><td>0.535</td><td>24</td><td>0</td><td>69</td><td>57.5%</td></tr>
-        <tr><td><code>7023307f</code></td><td>0.70</td><td>0.55</td><td>0.703</td><td>0.530</td><td>22</td><td>0</td><td>66</td><td>55.0%</td></tr>
-        <tr><td><code>00c9f8c0</code></td><td>0.40</td><td>0.25</td><td>0.784</td><td>0.593</td><td>33</td><td>0</td><td>97</td><td>80.6%</td></tr>
+        <tr><td>SHADOW</td><td>0.6732 ± 0.174</td><td>—</td><td>0</td></tr>
+        <tr><td>ACT_L−1</td><td>0.6537</td><td>+0.020 (+0.11σ)</td><td>19</td></tr>
+        <tr><td>ACT_L−2</td><td><strong>0.7057</strong></td><td><strong>−0.033 (−0.19σ)</strong></td><td>22</td></tr>
+        <tr><td>ACT_L−3</td><td>0.6918</td><td>−0.019 (−0.11σ)</td><td>25</td></tr>
       </tbody>
     </table>
   </div>
 
   <p>
-    The 0.90 and 0.70 configurations behave nearly identically. The 0.40 configuration is a
-    different regime: higher average divergence, 50% more WARNING triggers, 97 COOLDOWN tokens
-    versus ~67, and 80.6% intervention rate versus ~56%. More aggressive damping produced
-    more instability signal, not less.
+    Acting one layer back makes things <em>worse</em>, not better. Acting two layers
+    back is also worse. The controller is firing at similar rates in all three
+    configurations (~20 interventions per 5-seed suite), so this is not a
+    "intervention never fires" artifact. The interpretation is that perturbations
+    earlier in the residual stream cascade through subsequent attention and MLP
+    layers, accumulating drift rather than steering it. This closes out the
+    layer-placement direction of controller redesign.
   </p>
-  <p>
-    The output text across the three runs reveals the most striking result. Same prompt, same seed,
-    same greedy decoding — three different incorrect claims:
-  </p>
 
-  <div class="diagram">
-<pre style="background:none;border:none;padding:0;margin:0;font-size:0.75rem;">
-<span class="d-accent">scale=0.90</span>  "air on top of wing moves faster... pressure difference lifts the plane"
-            <span class="d-dim">equal transit-time myth (standard textbook error)</span>
+  <h3>F28 — Synthesis: divergence measures prose surprise, not dynamical instability</h3>
 
-<span class="d-warn">scale=0.70</span>  "shape of wing creates a vacuum on top surface, which generates lift"
-            <span class="d-dim">vacuum myth — different framing, numbered list output format</span>
-
-<span class="d-warn">scale=0.40</span>  "pressure of air is lower on top than bottom, creating net upward force"
-            <span class="d-dim">pressure-only myth — formal prose, different structural organization</span></pre>
+  <div class="callout callout-green">
+    <p>
+      <strong>The cumulative result of the controller arc.</strong> Across nine
+      findings (F4, F17, F18, F21, F22, F23, F24, F26, F27), every controller variant
+      either (a) does nothing because the actuator is absorbed by an intervening norm
+      layer, (b) does nothing because the perturbation is smaller than local logit
+      margins, (c) opportunistically hijacks one branchpoint per seed and otherwise
+      does nothing, or (d) is destabilizing rather than stabilizing.
+    </p>
+    <p>
+      The simplest explanation that fits all of these is that the divergence signal
+      we are measuring does not measure what closed-loop stability control needs it
+      to measure. Inspection of the highest-divergence steps in observe runs
+      (replicated from v1's "divergence spikes at structural boundaries" finding,
+      which we confirm) shows that the signal spikes at word-starts, punctuation, the
+      transitions between numbered list items, and the boundaries between semantic
+      units. These are normal features of well-formed prose, not symptoms of
+      trajectory destabilization. Closed-loop intervention on this signal is therefore
+      a controller fighting prose structure.
+    </p>
+    <p>
+      The instrument is sound. The trigger signal is not what it was framed as. The
+      naive controller redesign space (varying intervention class, magnitude,
+      direction, layer, reference rule) is exhausted within the observe-run regime we
+      can support on commodity hardware.
+    </p>
   </div>
+</section>
+
+<section>
+  <h2><span class="sec-num">§11</span> Branchpoint Hijacking: A Positive Finding</h2>
 
   <p>
-    Controller aggressiveness is directly correlated with which attractor the model lands in.
-    Each misconception represents a different region of the model's generation landscape —
-    the controller's response curve determines which basin the trajectory settles into
-    from identical starting conditions.
+    The controller arc was a falsified hypothesis. The same apparatus produced an
+    unfalsified mechanism worth reporting. We call it <em>branchpoint hijacking</em>:
+    additive perturbations applied to the final transformer layer can flip individual
+    tokens at predictable positions in the generation sequence. The mechanism reaches
+    the LM head (unlike scaling, which is absorbed by RMSNorm), it is reproducible
+    across seeds, and it generalizes architecturally. Whether a flip improves or
+    degrades the resulting output is model- and prompt-specific — that is the
+    consequence-side limit, not a flaw in the mechanism.
   </p>
 
-  <h3>Phase Behavior (System4, s=0.90)</h3>
+  <h3>F25 — The mechanism, observed</h3>
   <p>
-    Dividing the 0.90 run into thirds reveals clear phase structure:
+    A small number of additive perturbations applied during a stress run can produce
+    one or more single-token flips at positions where the LM head's argmax is
+    margin-vulnerable. Once a single token has been flipped, subsequent tokens are
+    drawn from a different conditional distribution, and the trajectory enters a
+    different attractor with its own local dynamics. The visible footprint of a
+    successful hijack on the F23/F24 sourdough runs is one token of difference between
+    shadow and active output, followed by a continuation that is structurally and
+    semantically distinct.
+  </p>
+
+  <h3>F29 — Architectural generalization vs. consequence specificity</h3>
+  <p>
+    A scope check on TinyLlama-1.1B (Llama family architecture, vs. Qwen-family for
+    Qwen3-1.7B) using the same configuration confirmed that the flip mechanism
+    generalizes. On 3 of 5 seeds with non-degenerate generation, the active cell
+    flipped tokens vs shadow with the controller firing 9–10 times per seed. However,
+    on TinyLlama every hijacked seed landed in a worse basin: avg_raw_div was higher
+    in active than shadow on all three (e.g., seed 2: 1.006 → 1.066, output became
+    "<code>Pleaseincludeingredients,measurements,bakingtime…</code>" with whitespace
+    tokens dropped). This contrasts with Qwen3 sourdough seed 2, where the same
+    mechanism landed the trajectory in a coherent recipe basin.
+  </p>
+  <p>
+    The conclusion: the perturbation-induced branchpoint flip is architecture-general;
+    whether the new basin is better or worse is a property of the model's basin
+    structure for that prompt, not a property of the perturbation. F25 was effectively
+    two claims in one. The mechanism replicates; the consequence does not.
+  </p>
+
+  <h3>F31 — Branchpoint flippability is predictable from the clean trajectory</h3>
+  <p>
+    A natural follow-up question: given a step in clean (unperturbed) generation, can
+    we predict whether a small perturbation at that step would flip the next token?
+    We address this offline using existing control-mode runs. For each pair of
+    matched shadow/active runs that share (model, prompt, seed, max_tokens,
+    temperature, measure_layer, act_layer) and where the active run actually fires
+    the controller, we construct per-step training rows: features extracted from the
+    <em>shadow</em> trajectory at step <em>t</em>, label 1 if the active and shadow
+    tokens at step <em>t</em> differ.
+  </p>
+  <p>
+    Critical methodology note: features must come from the shadow trajectory. An
+    earlier analyzer pulled features from the active trajectory and reported
+    AUROC = 0.80, but the active trajectory contains intervention-downstream fields
+    (<code>intervention_applied</code>, <code>scale_used</code>,
+    <code>controller_drift_norm</code>) that are tautologically correlated with the
+    flip label — non-zero only on steps where the controller fired. The 0.80 was a
+    data leak, not a predictor.
+  </p>
+  <p>
+    With shadow-trajectory features only, on Qwen3-1.7B with pair-level
+    train/test split (80/20) and matched configurations:
   </p>
 
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Phase</th><th>Tokens</th><th>Intervention Rate</th><th>Mean Divergence</th></tr></thead>
+      <thead><tr><th>Prompt</th><th>Pairs</th><th>Step rows</th><th>Held-out AUROC</th></tr></thead>
       <tbody>
-        <tr><td>Early — incorrect claim</td><td>0–53</td><td>67.9%</td><td>0.730</td></tr>
-        <tr><td>Mid — debunking</td><td>54–106</td><td>71.7%</td><td>0.746</td></tr>
-        <tr><td>Late — correct explanation</td><td>107–159</td><td>33.3%</td><td>0.667</td></tr>
+        <tr><td>Sourdough (procedural)</td><td>12</td><td>576</td><td>0.82</td></tr>
+        <tr><td>Water cycle (descriptive)</td><td>5</td><td>240</td><td>0.86</td></tr>
       </tbody>
     </table>
   </div>
 
   <p>
-    Intervention rate drops from ~70% to 33% in the late phase, coinciding with the model
-    settling into the stable correct-explanation frame. The trajectory becomes more locally
-    predictable once the model is no longer navigating a representational frame transition.
-  </p>
-
-  <h3>Divergence Spikes at Structural Boundaries</h3>
-  <p>
-    The highest-divergence tokens cluster reproducibly at paragraph and section boundaries
-    across all three System4 runs — the seams where the model shifts representational frame:
-  </p>
-
-  <div class="diagram">
-<pre style="background:none;border:none;padding:0;margin:0;font-size:0.75rem;">
-t= 32  '.
-
-'    div=<span class="d-warn">1.018</span>  WARNING   end of incorrect claim paragraph
-t= 33  'De'      div=<span class="d-warn">1.128</span>  COOLDOWN  start of "Debunking:" — run peak
-t= 84  '.'       div=<span class="d-warn">1.085</span>  WARNING   end of debunking paragraph
-t=103  '.
-
-'   div=<span class="d-warn">1.022</span>  WARNING   boundary before "Correct explanation"
-t=104  'Correct' div=<span class="d-warn">1.120</span>  COOLDOWN  section header token</pre>
-  </div>
-
-  <p>
-    The VAR(1) predictor detects frame transitions as trajectory instability — the hidden
-    dynamics at paragraph boundaries are locally unpredictable relative to the preceding window.
-    This motivates an open question: can structural discontinuities (paragraph breaks, topic shifts)
-    be distinguished from pathological ones (factual drift, behavioral instability)?
-    The current controller treats both identically.
-  </p>
-
-  <h3>Experiment 2: V2 Open-Loop Intervention Sweep</h3>
-  <p>
-    Three V2 runs applied fixed scaling interventions to tokens 1–80. Both branches started
-    from an identical SeedCache — verified by matching hidden norm and entropy at t=0.
+    Both prompts independently clear an AUROC threshold of 0.80 within Qwen3-1.7B.
+    The features that drive the prediction differ between prompt classes:
   </p>
 
   <div class="table-wrap">
     <table>
-      <thead>
-        <tr><th>Magnitude</th><th>Dev. During</th><th>Recovery After</th><th>Final Distance</th><th>Recovery Ratio</th><th>Token Match</th><th>Regime</th></tr>
-      </thead>
+      <thead><tr><th>Feature</th><th>Sourdough sign</th><th>Water cycle sign</th><th>Mechanistic interpretation</th></tr></thead>
       <tbody>
-        <tr><td>0.90</td><td>0.169</td><td>−0.224</td><td>0.393</td><td>−1.331</td><td>31.2%</td><td>DIVERGENT</td></tr>
-        <tr><td>0.70</td><td>0.466</td><td>−0.094</td><td>0.560</td><td>−0.202</td><td>5.6%</td><td>DIVERGENT</td></tr>
-        <tr><td>0.40</td><td>0.494</td><td>+0.054</td><td>0.440</td><td>+0.108</td><td>5.6%</td><td>PLASTIC</td></tr>
+        <tr><td><code>step_idx</code></td><td>+ (later)</td><td>+ (later, AUROC 0.80 alone)</td><td>Baseline divergence accumulates with sequence length; later tokens have more chances to be at margin.</td></tr>
+        <tr><td><code>spectral.permutation_change</code></td><td>+ (high)</td><td><strong>− (low)</strong></td><td>Time-axis spectral structure; sign flips between procedural and descriptive prompts.</td></tr>
+        <tr><td><code>layer_stiffness.−1.elasticity</code></td><td>+ (low velocity)</td><td>+</td><td>Slow-moving final-layer activations are at branchpoints more often.</td></tr>
+        <tr><td><code>svd.top1_energy_frac</code></td><td>+ (concentrated)</td><td>—</td><td>Trajectory concentrated in dominant direction — local instability.</td></tr>
+        <tr><td><code>spectral.total_power</code></td><td>− (high)</td><td>−</td><td>High-energy steps are <em>less</em> flippable.</td></tr>
       </tbody>
     </table>
   </div>
 
   <p>
-    All three produced persistent branch separation — logit JS divergence at final token
-    approaches 1.0 in every run. None recovered to baseline. The 0.90 result is the most
-    counterintuitive: smallest deviation <em>during</em> the intervention (0.169) but most
-    divergent overall (recovery ratio −1.331). The post-intervention branch continued moving
-    away from baseline after the perturbation ended. The 0.40 run is the only one with even
-    marginal recovery (PLASTIC, ratio +0.108).
-  </p>
-
-  <h3>Hidden State Norm Collapse and Snapback</h3>
-  <p>
-    The 0.40 V2 run reveals the internal mechanism. During intervention (t=1–80),
-    the intervention branch operates at roughly one-third of baseline hidden norm —
-    then snaps back the instant the intervention ends:
-  </p>
-
-  <div class="diagram">
-<pre style="background:none;border:none;padding:0;margin:0;font-size:0.75rem;">
-<span class="d-dim">Baseline norm throughout:       ~112–138</span>
-<span class="d-warn">Intervention norm (t=1–80):     ~35–68  (~40% of baseline)</span>
-<span class="d-accent">Post-intervention (t=81+):      ~116–134 (recovered, overshooting)</span>
-
-t=80  base=117.0  intv= 45.8  <span class="d-dim">last intervention token</span>
-t=81  base=122.5  intv=116.5  <span class="d-accent">intervention ends: norm doubles in one step</span>
-t=82  base=124.5  intv=133.0  <span class="d-dim">overshoots baseline, divergence continues</span></pre>
-  </div>
-
-  <p>
-    The snapback is not gradual. Hidden norm jumps from 45.8 to 116.5 in a single token,
-    then overshoots to 133. The model's natural representational scale reasserts immediately,
-    but the trajectory established during the compressed phase propagates forward at full
-    magnitude. The model does not reorient toward baseline — it continues the compressed-phase
-    content path with recovered energy.
-  </p>
-
-  <h3>High Certainty Under Compression</h3>
-  <p>
-    A counterintuitive finding: the compressed low-norm state produces <em>higher</em>
-    next-token confidence than baseline at many positions:
-  </p>
-
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Token</th><th>Baseline top-1 prob</th><th>Intervention top-1 prob</th></tr></thead>
-      <tbody>
-        <tr><td>t=10</td><td>0.221</td><td><strong>0.870</strong></td></tr>
-        <tr><td>t=20</td><td>0.381</td><td><strong>0.906</strong></td></tr>
-        <tr><td>t=40</td><td>0.695</td><td><strong>0.9999</strong></td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <p>
-    The intervention branch generates with near-total local certainty while following
-    a globally different content path. This is consistent with the model having settled into
-    an alternate attractor basin with its own stable local dynamics — not a destabilized state,
-    but a different stable state.
-  </p>
-
-  <h3>Summary</h3>
-  <p>
-    The central finding across both experiments: <strong>the relationship between intervention
-    magnitude and outcome is nonlinear.</strong> In V2, 0.90 produced more post-intervention
-    divergence than 0.40. In System4, 0.40 produced more instability signal than 0.90.
-    The model's generation dynamics have structure — stable basins, transition zones,
-    and alternate attractors. Intervention outcomes depend on which basin the trajectory
-    is pushed into, not simply on intervention strength.
+    The sign flip on <code>spectral.permutation_change</code> between procedural and
+    descriptive generation is the most interesting line item. It suggests Qwen3-1.7B
+    drives different trajectory geometries for different prompt classes, and the
+    geometric signature of a "branchpoint" depends on which class. The only feature
+    with a consistent sign across both prompts is <code>step_idx</code> — generation
+    position — which is the universal-but-weak predictor.
   </p>
 
   <div class="callout callout-green">
     <p>
-      <strong>Key finding:</strong> Same prompt. Same seed. Same greedy decoding.
-      Three different incorrect claims under three controller configurations.
-      Controller aggressiveness determines which attractor the model settles into.
-      This is the generation landscape made visible.
+      <strong>The positive finding, stated plainly.</strong> Within Qwen3-1.7B, given a
+      step of clean generation, we can predict at AUROC ≥ 0.80 whether a small additive
+      perturbation at that step would flip the next token. The features driving the
+      prediction are geometric properties of the unperturbed trajectory at that step,
+      and those features are prompt-class-dependent. The mechanism by which the flip
+      occurs (additive perturbation reaching the LM head's argmax margin) generalizes
+      to a Llama-family model; whether the resulting trajectory is better or worse
+      does not.
     </p>
-  </div></section>
+  </div>
+</section>
 
 <section>
-  <h2><span class="sec-num">§11</span> Reproducibility Infrastructure</h2>
+  <h2><span class="sec-num">§12</span> The Mapping Program</h2>
+
+  <p>
+    Following the controller arc's falsification, the project's center of gravity
+    shifts from "build a closed-loop controller" to "map the geometry of trajectory
+    sensitivity, persistence, and branchpoint behavior in Qwen3-1.7B." This is a
+    deliberately scoped agenda — single model, mechanistic questions, explicit stop
+    conditions per question — designed to keep the work falsifiable and finite.
+  </p>
+
+  <h3>Three open questions</h3>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th>Question</th><th>Stop condition</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Q1</strong></td>
+          <td>Branchpoint geometry: when are tokens flippable?</td>
+          <td>Within-Qwen3 held-out AUROC ≥ 0.80 across ≥2 prompts.</td>
+          <td><strong>Closed (F31)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Q2</strong></td>
+          <td>Perturbation propagation: how does an injected delta evolve through the residual stream?</td>
+          <td>Per-layer propagation curves that mechanistically explain F27.</td>
+          <td>Open</td>
+        </tr>
+        <tr>
+          <td><strong>Q3</strong></td>
+          <td>Basin structure: when does a flip improve vs. degrade output?</td>
+          <td>Pre-flip generation feature predicts improve-vs-degrade with AUROC ≥ 0.7 on Qwen3-1.7B.</td>
+          <td>Open (F29 is one cross-model data point)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Controller-return criteria</h3>
+  <p>
+    The closed-loop controller research direction is paused, not abandoned. We
+    explicitly define the conditions under which it would be reasonable to reopen:
+    the controller returns to active investigation when <strong>any two</strong> of
+    the following become true.
+  </p>
+
+  <ol style="margin-left: 1.5rem; line-height: 2;">
+    <li>Q1 produces a branchpoint-flippability predictor with precision ≥ 0.7 on Qwen3-1.7B (provides a real trigger to replace the falsified divergence-as-instability trigger).</li>
+    <li>Q2 identifies a layer with bounded, non-cascading perturbation propagation (provides a principled choice of <code>act_layer</code> instead of the current trial-and-error).</li>
+    <li>Q3 identifies a feature of the pre-flip generation that predicts whether a flip will improve output (provides a meaningful gate: act only when expected improvement).</li>
+  </ol>
+
+  <p>
+    If two of these land, a controller redesign experiment using the new trigger,
+    layer, and gate becomes worth running. If none land within the mapping program,
+    the mechanistic findings (F25, F29, F31, plus Q2 and Q3 results) stand on their
+    own as an interpretability contribution and the controller stays paused.
+  </p>
+
+  <p>
+    What does <em>not</em> justify reopening the controller is more tuning of the
+    existing design space. The combinations
+    <code>(scaling | additive-random | additive-EMA-opposing | additive-anchor-opposing)</code>
+    × <code>(L=−1, L=−2, L=−3)</code> × <code>(magnitude ∈ {0.3, 0.6, 0.8, 1.2})</code>
+    have all been tested and are recorded in §10 and the
+    <code>RESEARCH_CONTROLLER.md</code> archive. Reopening this space without new
+    information from the mapping work would be blind tuning.
+  </p>
+</section>
+
+<section>
+  <h2><span class="sec-num">§13</span> Reproducibility Infrastructure</h2>
   <p>
     Observer is designed to produce artifacts that can support publishable claims, 
     not just exploratory analysis.
@@ -1315,45 +1589,85 @@ t=82  base=124.5  intv=133.0  <span class="d-dim">overshoots baseline, divergenc
     absent from published intervention work.
   </p>
   <p>
-    The CI workflow checks compile integrity across all four modules on every push. 
-    No runtime tests yet — adding integration tests that verify the baseline/intervention 
-    branches actually diverge under large perturbation is the next engineering priority.
+    The CI workflow runs a <code>compileall</code> pass over the active runtime
+    package and the orchestrator scripts on every push, plus a <code>unittest
+    discover</code> pass that exercises a small suite of guard tests. The guard tests
+    catch the kind of integration regression a previous Codex audit caught manually:
+    CLI semantic-layer parsing, branchpoint-analyzer default values, README quickstart
+    pointing at the unified runtime entry points rather than the legacy v1/v1.5/v2
+    scripts. The repository keeps two top-level research documents:
+    <code>RESEARCH.md</code> tracks the active mapping program and is the entry point
+    for any new session, and <code>RESEARCH_CONTROLLER.md</code> archives the
+    completed controller arc with full F-numbered findings so subsequent agents can
+    cite established facts without re-deriving them. <code>docs/RESEARCH_WORKFLOW.md</code>
+    documents the experiment handoff protocol both documents follow.
   </p>
 </section>
 
 <section>
-  <h2><span class="sec-num">§12</span> Limitations and Open Questions</h2>
+  <h2><span class="sec-num">§14</span> Limitations and Open Questions</h2>
   <p>
-    Several significant limitations constrain the current system's claims.
+    Several limitations constrain v2's claims, in addition to the central limitation
+    documented in §10 (the divergence trigger does not measure what closed-loop
+    stability needs it to measure).
   </p>
   <p>
-    <strong>Greedy decoding only.</strong> All generation uses argmax token selection. 
-    Temperature > 0 is where much of the interesting instability behavior surfaces in practice. 
-    Extending to sampled generation is straightforward but changes the interpretation of 
-    trajectory divergence (which now has a stochastic component).
+    <strong>Single-model scope.</strong> The mapping program in §12 is explicitly scoped
+    to Qwen3-1.7B. F25 Part A (the flip mechanism) replicates on TinyLlama-1.1B (F29);
+    F25 Part B (the basin direction) does not. F31's branchpoint predictor is within-
+    Qwen3 only. Cross-model generalization is a deferred research question, not a
+    settled one. Anyone applying these results to a different architecture should
+    expect F31's specific predictive features (e.g., the sign of
+    <code>spectral.permutation_change</code>) to need recalibration per model.
   </p>
   <p>
-    <strong>Asserted controller weights.</strong> The 70/15/10/5 weighting in the composite score 
-    is a design choice, not derived from empirical optimization. Whether these weights are 
-    well-calibrated for the phenomena of interest is unknown.
+    <strong>Prompt-class diversity.</strong> F31 closes Q1 on Qwen3 with two prompts
+    — one procedural ("Write step-by-step instructions for baking sourdough bread.")
+    and one descriptive ("Describe the water cycle in a few sentences.") — and finds
+    that predictive features differ between them. Three-or-more prompt classes
+    (reasoning, code, creative) would harden the prompt-class-dependent geometry
+    claim and is an immediate Q1-extension experiment.
   </p>
   <p>
-    <strong>Downstream validity.</strong> The divergence signal measures trajectory instability. 
-    Whether trajectory instability correlates with practically important failure modes — 
-    hallucination, factual drift, behavioral misalignment — is an open empirical question. 
-    The instrumentation is built to investigate this question; it does not answer it.
+    <strong>Sampling.</strong> v1 noted that all generation used greedy argmax. v2
+    added temperature/top-p/top-k sampling support, but a subtle finding emerged: with
+    matched seeds, <code>torch.multinomial</code> can produce the same drawn token
+    from slightly different conditional distributions, so logit-shift effects are
+    masked at the token level even when present. Future work should use unmatched
+    branch seeds when measuring perturbation effects on sampling-mode generation.
   </p>
   <p>
-    <strong>Architecture coverage.</strong> Layer discovery currently handles Llama/Qwen-style 
-    (<code>model.model.layers</code>), GPT-2/GPT-J (<code>transformer.h</code>), 
-    GPT-NeoX (<code>gpt_neox.layers</code>), and encoder-decoder (<code>model.decoder.layers</code>). 
-    Falcon, Mistral (sliding window attention), Gemma, Phi, and Mamba would require additional handling.
+    <strong>Controller-mode logit features not logged.</strong> A natural extension of
+    the F31 branchpoint predictor would include top-2 logit margin and per-step logit
+    entropy as features. Both are architecture-invariant and should be the most
+    direct mechanistic predictors of flippability. Neither is currently written into
+    <code>events.jsonl</code>; adding them is queued as a small code task and would
+    enable a more principled cross-model F31 follow-up.
   </p>
   <p>
-    <strong>VAR(1) window constraints.</strong> With window size 8, the VAR(1) model is fit on 
-    7 transitions in 64-dimensional space. The ridge regularization (λ=0.01) stabilizes the 
-    regression, but the statistical power of the prediction error signal is limited, particularly 
-    in the first few tokens before the window fills.
+    <strong>Asserted controller weights.</strong> The 70/15/10/5 weighting in the v1
+    composite score (§9) was a design choice, not derived from empirical optimization.
+    In v2 this is moot — the composite-score-driven controller is paused as a class —
+    but if controller research resumes the weighting choice should be re-derived from
+    the new trigger signal rather than carried forward.
+  </p>
+  <p>
+    <strong>Architecture coverage.</strong> Layer discovery currently handles Llama/
+    Qwen-style (<code>model.model.layers</code>), GPT-2/GPT-J
+    (<code>transformer.h</code>), GPT-NeoX (<code>gpt_neox.layers</code>), and
+    encoder-decoder (<code>model.decoder.layers</code>). Models tested in this paper:
+    Qwen3-1.7B (28 layers, primary) and TinyLlama-1.1B-Chat (22 layers, scope check
+    only). Falcon, Mistral (sliding window attention), Gemma, Phi, and Mamba would
+    require additional handling and are out of scope for this preprint.
+  </p>
+  <p>
+    <strong>VAR(1) window constraints.</strong> With window size 8, the VAR(1) model
+    is fit on 7 transitions in 64-dimensional space. The ridge regularization
+    (λ=0.01) stabilizes the regression, but statistical power of the prediction error
+    signal is limited, particularly in the first few tokens before the window fills.
+    This is part of why F28's "divergence measures prose surprise" framing makes
+    sense: the predictor is fitting short-window local trajectory dynamics, which are
+    legitimately disrupted at semantic-unit boundaries in normal generation.
   </p>
 
   <h3>Development Context</h3>
@@ -1370,55 +1684,118 @@ t=82  base=124.5  intv=133.0  <span class="d-dim">overshoots baseline, divergenc
     inclusion in this paper.
   </p>
 
-  <h3>Future Work: Validation Roadmap</h3>
+  <h3>Future Work: What v1's Validation Roadmap Became</h3>
+
   <p>
-    The key open question is downstream validity: whether trajectory divergence predicts outcomes
-    practitioners care about. The current instrumentation is built to test this question, but does not
-    yet answer it.
+    v1 listed three planned validation experiments. v2 reports what happened to each.
   </p>
+
   <p>
-    <strong>Experiment A (minimal downstream correlation):</strong> run observer in shadow mode on
-    30-50 factual questions with ground-truth answers; compare divergence statistics (for example max,
-    mean, and variance) between correct and incorrect outputs. Estimated compute: 2-4 GPU-hours on a 7B model.
+    <strong>v1 Experiment A (minimal downstream correlation).</strong> Status:
+    <em>partially answered, with a different answer than expected.</em> The intended
+    test was "do divergence statistics differ between correct and incorrect outputs."
+    What we found instead is that divergence reliably spikes at structural boundaries
+    in well-formed prose — paragraph breaks, semantic transitions, numbered list
+    markers, word-starts. Most "high divergence" steps are not associated with
+    incorrect output; they are associated with normal writing. This redirected the
+    research from "use divergence as a hallucination detector" to "characterize what
+    divergence actually measures" (F28).
   </p>
+
   <p>
-    <strong>Experiment B (attractor-basin replication):</strong> replicate the controller-aggressiveness
-    result across 30+ prompts, 2-3 model families, and 3 controller configurations to test whether
-    basin-switching behavior generalizes beyond the current prompt/model pairing.
+    <strong>v1 Experiment B (attractor-basin replication).</strong> Status:
+    <em>did not replicate as a controller-property claim.</em> v1's headline result
+    on Qwen2.5-7B (controller aggressiveness selects which incorrect-claim attractor
+    the model lands in) could not be reproduced on Qwen3-1.7B because scaling at
+    L=−1 has zero effect on Qwen3 (F17/F22). The basin-selection phenomenon may still
+    be real on Qwen2.5-7B; we cannot confirm or deny without a re-run with the
+    measurement controls v2 added. We do not currently plan that re-run because the
+    mechanistic finding (F25 branchpoint hijacking) supersedes it as a more general
+    and more measurable phenomenon.
   </p>
+
   <p>
-    <strong>Experiment C (signal baseline comparison):</strong> compare VAR(1) divergence against simpler
-    baselines already available in telemetry (token entropy, hidden-state norm velocity, random baseline)
-    on the same boundary-transition labels. If VAR(1) does not outperform simpler signals, simplify the system.
+    <strong>v1 Experiment C (signal baseline comparison).</strong> Status:
+    <em>partially superseded.</em> The intended test was "does VAR(1) divergence
+    outperform simpler signals." The v2 work did not run that comparison head-to-head,
+    but F31's univariate-feature AUROCs offer a partial answer: the strongest single
+    feature for branchpoint flippability is <code>spectral.permutation_change</code>
+    (a time-axis spectral statistic, AUROC 0.74 alone) or <code>step_idx</code>
+    (literally token position, AUROC 0.80 alone on water-cycle). Neither is the
+    VAR(1) divergence signal. This is a gentle hint that simpler signals may carry
+    much of what divergence carries, and a head-to-head benchmark is worth doing.
+    Queued as a follow-up.
+  </p>
+
+  <p>
+    <strong>New v2 work queued.</strong> Q2 (perturbation propagation) and Q3 (basin
+    structure) — both defined in §12 with stop conditions — are the next planned
+    experiments. Q2 is ~1 hour of offline analysis on existing stress runs; Q3
+    requires a small new experiment matrix (5 prompt classes × 3 seeds × 2 cells =
+    30 control runs, ~5 minutes with the warm-model daemon). Closing both within the
+    mapping program would either trigger the controller-return criteria in §12 or
+    establish a clean negative result on closed-loop stability for this model class.
   </p>
 </section>
 
 <section>
-  <h2><span class="sec-num">§13</span> Conclusion</h2>
+  <h2><span class="sec-num">§15</span> Conclusion</h2>
+
   <p>
-    Observer is an attempt to build the experimental protocol layer that interpretability 
-    research has so far deferred. The field has made substantial progress understanding what 
-    models compute; it has invested comparatively little in understanding the dynamics of 
-    that computation — whether generation is stable, whether perturbations persist, 
-    whether recovery can be induced.
+    Observer started as an attempt to build a closed-loop stability controller for
+    autoregressive language model generation: detect destabilization in real time,
+    apply proportional damping, observe recovery. The instrument we built does most
+    of what we set out to build — deterministic branchpointing, per-token telemetry,
+    hooked interventions, real-time controller logic — but the central control claim
+    did not survive contact with our own validation experiments. The trigger signal
+    we had been calling "trajectory instability" turned out to measure token-level
+    prose surprise: word-starts, semantic transitions, structural boundaries. A
+    controller built on that signal is, in effect, fighting normal writing.
   </p>
+
   <p>
-    The control theory framing is intentional. An observer in the control engineering sense 
-    is a system that estimates internal state from external outputs in real time. That is 
-    precisely what this stack attempts: not to analyze model internals post-hoc, 
-    but to maintain a running estimate of trajectory health and act on it.
+    Reporting the falsification matters. The v1 paper presented closed-loop control
+    as a working contribution, with a striking attractor-selection result on
+    Qwen2.5-7B that, we now suspect, lacked the controls to rule out simpler
+    explanations. The v2 work makes the central claim falsifiable, runs the
+    falsification, and reports it. That is the value of building a research
+    instrument before claiming a research result with it.
   </p>
+
   <p>
-    Whether runtime use of interpretability infrastructure becomes standard practice remains an open
-    question. Observer contributes a concrete protocol layer for deterministic branchpointing, recovery
-    measurement, and closed-loop intervention that can be tested, falsified, and extended.
+    What remains is a useful instrument and one positive mechanistic finding. The
+    instrument — SeedCache branchpointing, the unified runtime, the warm daemon, the
+    decoupled measure/act layer hooks, the corrected token-time spectral probe — is
+    sound and reusable. The positive finding — branchpoint hijacking on Qwen3-1.7B
+    with a within-model AUROC predictor that clears 0.80 on two prompt classes — is
+    a concrete interpretability result that the field could build on. The mapping
+    program in §12 organizes what comes next, with explicit stop conditions and
+    explicit criteria for reopening the controller question if the data warrants it.
   </p>
+
   <p>
-    This project was developed by an independent researcher without formal ML or software engineering
-    training and with no prior programming experience, using AI-assisted implementation workflows and
-    rented compute. We include this as methodological context: research judgment and empirical discipline
-    can now be combined with AI-supported implementation. All code, runs, and claims were human-reviewed
-    against generated artifacts, and the immediate next step is executing the validation roadmap in §12.
+    The control theory framing remains intentional, but its meaning has changed.
+    An observer in the control engineering sense estimates internal state from
+    external outputs. The observer here is now best understood as exactly that —
+    a state estimator and characterization tool for transformer trajectories — without
+    the active feedback loop that the v1 framing claimed and v2 falsified. Whether
+    a different trigger signal (one that actually correlates with downstream output
+    failure) could rebuild a working controller is an open question this work has
+    not answered, and is the central question for any v3.
+  </p>
+
+  <p>
+    This project was developed by an independent researcher without formal ML or
+    software engineering training and with no prior programming experience, using
+    AI-assisted implementation workflows and rented compute. We include this as
+    methodological context. The decision to invest in falsifying the v1 central
+    claim — rather than continuing to tune it — was set by the author and
+    implemented against artifacts that were jointly reviewed before being treated
+    as evidence. All code, runs, and claims were human-reviewed against generated
+    artifacts. The complete F-numbered evidence chain (F1–F31) is preserved in
+    <code>RESEARCH_CONTROLLER.md</code> and <code>RESEARCH.md</code> in the
+    repository, with full per-experiment run identifiers so any claim in this paper
+    can be traced to its underlying run artifacts.
   </p>
 </section>
 
