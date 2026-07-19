@@ -29,6 +29,61 @@
     `intervention_applied` counts per run—a passing cell where the controller
     never fired is a measurement-layer confound.
 
+## Frozen M3R-2 Replication
+
+M3R-2 is preregistered under
+`observer-m3r2-basin-replication-v1`. Its design was frozen in code and
+documentation before generating replication data:
+
+- 15 new prompts, disjoint from M3R: `seasons_tilt`, `rock_cycle`,
+  `electric_circuit`, `rice_steps`, `flat_tire_steps`,
+  `tomato_transplant_steps`, `glass_violin`, `mars_orchard`,
+  `undersea_library`, `museum_tickets`, `rectangle_garden`, `discount_tax`,
+  `dedupe_order_code`, `clamp_code`, and `word_frequencies_code`;
+- three seeds (`0`, `1`, `2`) and two magnitudes (`0`, `0.30`), for 90 runs;
+- Qwen3-1.7B layer 27, 64 mapped tokens, 96 continuation tokens, at most five
+  outcome-blind selected episodes, temperature 0.8, top-p 1.0, top-k 0, and
+  tie tolerance 0.025;
+- exact identity controls, exact clean replay, paired per-position sampling
+  RNG, and no intervention during branch continuation;
+- whole-prompt holdout with L2 regularization 0.05, a mean AUROC threshold of
+  0.70, and at least five valid prompt splits.
+
+The predictor may use only these preregistered pre-flip/context fields plus
+prompt class:
+
+```text
+clean_top1_margin
+clean_hidden_norm
+normalized_position
+context_sequence_length
+prefix_repetition_score
+prefix_unique_token_ratio
+consumed_token.length
+consumed_token.leading_space
+clean_diagnostics.local_prediction_error
+clean_diagnostics.logit_entropy
+clean_diagnostics.hidden_velocity
+clean_diagnostics.hidden_acceleration
+clean_diagnostics.spectral.spectral_entropy
+clean_diagnostics.spectral.permutation_change
+clean_diagnostics.svd.effective_rank
+clean_diagnostics.svd.top1_energy_frac
+clean_diagnostics.layer_stiffness.27.stiffness
+clean_diagnostics.layer_stiffness.27.stiffness_trend
+prompt_class.code
+prompt_class.creative
+prompt_class.factual
+prompt_class.procedural
+prompt_class.reasoning
+```
+
+Generated text is scored by deterministic, prompt-specific rubrics whose
+fixtures and code parser were frozen before the run. A rubric improvement or
+degradation is a task-specific operational outcome, not universal output
+quality. Ties, no-flips, invalid holdouts, and exact controls remain visible
+in coverage and are never relabeled to help the binary predictor.
+
 ## Standard Run Metadata
 
 The unified `runtime_lab.cli.main` runners (and the warm

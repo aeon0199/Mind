@@ -828,7 +828,7 @@ _MODES_DOC: Dict[str, Dict[str, Any]] = {
 
 def _capabilities_payload() -> Dict[str, Any]:
     registry = load_registry()
-    from runtime_lab.basins.evaluators import PROMPT_SPECS
+    from runtime_lab.basins.evaluators import ALL_PROMPT_SPECS
 
     return {
         "version": "0.2.0-llm-first",
@@ -859,7 +859,7 @@ def _capabilities_payload() -> Dict[str, Any]:
                 "prompt": spec.prompt,
                 "evaluator_id": spec.evaluator_id,
             }
-            for spec in PROMPT_SPECS
+            for spec in ALL_PROMPT_SPECS
         ],
         "advisories": {
             "description": (

@@ -235,6 +235,23 @@ def test_console_static_ui_exposes_basins_mode():
     assert '.run-mode[data-mode="basins"]' in stylesheet
 
 
+def test_console_capabilities_expose_both_frozen_basin_prompt_sets():
+    capabilities = observer_console._capabilities_payload()
+    prompt_keys = {
+        row["key"] for row in capabilities["registered_basin_prompts"]
+    }
+
+    assert {
+        "water_cycle",
+        "seasons_tilt",
+        "tomato_transplant_steps",
+        "clamp_code",
+    } <= prompt_keys
+    assert "exploratory" in observer_console._MODES_DOC["basins"]["params"][
+        "prompt_key"
+    ]
+
+
 def test_nnsight_remote_fails_before_loading_with_an_honest_boundary():
     with pytest.raises(RuntimeError, match="trace-based backend"):
         load_model_with_backend(

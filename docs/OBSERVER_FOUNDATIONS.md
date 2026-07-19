@@ -228,3 +228,57 @@ is a preregistered prompt-breadth replication:
 
 No controller rows should be used as causal branchpoint or basin-outcome
 labels, and no controller redesign should resume from the present evidence.
+
+### Frozen M3R-2 preregistration
+
+The prompt-breadth replication is now frozen as
+`observer-m3r2-basin-replication-v1` before any replication output is
+generated. It uses 15 prompts that are entirely new relative to M3R:
+
+- factual: `seasons_tilt`, `rock_cycle`, `electric_circuit`;
+- procedural: `rice_steps`, `flat_tire_steps`, `tomato_transplant_steps`;
+- creative: `glass_violin`, `mars_orchard`, `undersea_library`;
+- reasoning: `museum_tickets`, `rectangle_garden`, `discount_tax`;
+- code: `dedupe_order_code`, `clamp_code`, `word_frequencies_code`.
+
+The fixed grid is three seeds (`0`, `1`, `2`) by magnitudes `0` and `0.30`,
+for 90 runs on Qwen3-1.7B. Each run maps 64 tokens at layer 27 and continues
+at most five outcome-blind episodes for 96 intervention-free tokens with
+temperature 0.8, top-p 1.0, top-k 0, and paired per-position randomness.
+Identity controls and clean replay must be exact.
+
+The predictor uses whole-prompt holdout, L2 regularization `0.05`, a mean
+AUROC threshold of `0.70`, and at least five valid held-out prompts. Its input
+is limited to this frozen 23-field tuple:
+
+```text
+clean_top1_margin
+clean_hidden_norm
+normalized_position
+context_sequence_length
+prefix_repetition_score
+prefix_unique_token_ratio
+consumed_token.length
+consumed_token.leading_space
+clean_diagnostics.local_prediction_error
+clean_diagnostics.logit_entropy
+clean_diagnostics.hidden_velocity
+clean_diagnostics.hidden_acceleration
+clean_diagnostics.spectral.spectral_entropy
+clean_diagnostics.spectral.permutation_change
+clean_diagnostics.svd.effective_rank
+clean_diagnostics.svd.top1_energy_frac
+clean_diagnostics.layer_stiffness.27.stiffness
+clean_diagnostics.layer_stiffness.27.stiffness_trend
+prompt_class.code
+prompt_class.creative
+prompt_class.factual
+prompt_class.procedural
+prompt_class.reasoning
+```
+
+The interpretation boundary is unchanged: improve and degrade mean higher and
+lower scores under a declared deterministic task rubric, not universal
+semantic quality. Ties, no-flips, invalid holdouts, and exact controls remain
+part of the reported evidence. The prompts, rubrics, features, regularization,
+and stop condition must not change in response to replication outcomes.
