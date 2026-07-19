@@ -12,6 +12,7 @@ from typing import Any, Iterable, Mapping, Sequence
 import torch
 
 from runtime_lab.basins.evaluators import (
+    M3R2_PROMPT_SPECS,
     PROMPT_SPECS,
     BasinPromptSpec,
     get_prompt_spec,
@@ -22,6 +23,13 @@ from runtime_lab.basins.experiment import (
     PROTOCOL,
     SELECTION_PROTOCOL,
     run_basin_experiment,
+)
+from runtime_lab.basins.replication import (
+    M3R2_AUROC_THRESHOLD,
+    M3R2_CALIBRATION_PROTOCOL,
+    M3R2_MINIMUM_VALID_PROMPT_SPLITS,
+    M3R2_PREDICTOR_FEATURES,
+    M3R2_PREDICTOR_L2_REGULARIZATION,
 )
 from runtime_lab.cli._common import (
     backend_num_layers,
@@ -168,8 +176,14 @@ def _build_design(
     probe_layers = resolve_probe_layers("auto", num_layers)
     if resolved_layer not in probe_layers:
         probe_layers = [resolved_layer, *probe_layers]
-    return {
-        "protocol": CALIBRATION_PROTOCOL,
+    prompt_set = str(getattr(args, "prompt_set", "m3r"))
+    protocol = (
+        M3R2_CALIBRATION_PROTOCOL
+        if prompt_set == "m3r2"
+        else CALIBRATION_PROTOCOL
+    )
+    design = {
+        "protocol": protocol,
         "measurement_protocol": PROTOCOL,
         "selection_protocol": SELECTION_PROTOCOL,
         "continuation_protocol": CONTINUATION_PROTOCOL,
@@ -201,6 +215,21 @@ def _build_design(
         "top_k": int(args.top_k),
         "tie_tolerance": float(args.tie_tolerance),
     }
+    if prompt_set == "m3r2":
+        design.update(
+            {
+                "prompt_set": prompt_set,
+                "predictor_feature_set": list(M3R2_PREDICTOR_FEATURES),
+                "predictor_l2_regularization": (
+                    M3R2_PREDICTOR_L2_REGULARIZATION
+                ),
+                "minimum_valid_prompt_splits": (
+                    M3R2_MINIMUM_VALID_PROMPT_SPLITS
+                ),
+                "auroc_threshold": M3R2_AUROC_THRESHOLD,
+            }
+        )
+    return design
 
 
 def _expected_config(
@@ -353,14 +382,23 @@ def _run_cell(
     )
 
 
-def _select_prompts(keys: Iterable[str]) -> list[BasinPromptSpec]:
+def _select_prompts(
+    keys: Iterable[str],
+    *,
+    prompt_set: str = "m3r",
+) -> list[BasinPromptSpec]:
     requested = list(keys)
+    prompt_specs = (
+        M3R2_PROMPT_SPECS if prompt_set == "m3r2" else PROMPT_SPECS
+    )
     if requested == ["all"]:
-        return list(PROMPT_SPECS)
-    table = {spec.key: spec for spec in PROMPT_SPECS}
+        return list(prompt_specs)
+    table = {spec.key: spec for spec in prompt_specs}
     unknown = sorted(set(requested) - set(table))
     if unknown:
-        raise ValueError(f"Unknown basin prompt keys: {unknown}")
+        raise ValueError(
+            f"Unknown {prompt_set} basin prompt keys: {unknown}"
+        )
     return [table[key] for key in requested]
 
 
@@ -374,6 +412,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", required=True)
     parser.add_argument("--model", default="qwen3-1.7b")
     parser.add_argument("--registry-path", default="models.json")
+    parser.add_argument(
+        "--prompt-set",
+        choices=("m3r", "m3r2"),
+        default="m3r",
+    )
     parser.add_argument("--prompt-keys", default="all")
     parser.add_argument("--seeds", default="0,1,2")
     parser.add_argument("--magnitudes", default="0,0.3")
@@ -395,15 +438,18 @@ def main() -> None:
     args.seeds = _parse_ints(args.seeds)
     args.magnitudes = _parse_floats(args.magnitudes)
     args.prompts = _select_prompts(
-        key.strip()
-        for key in args.prompt_keys.split(",")
-        if key.strip()
+        (
+            key.strip()
+            for key in args.prompt_keys.split(",")
+            if key.strip()
+        ),
+        prompt_set=args.prompt_set,
     )
     if not args.seeds or not args.prompts:
         raise ValueError("At least one seed and prompt are required")
     if 0.0 not in args.magnitudes:
         raise ValueError("M3R calibration requires magnitude 0 control")
-    evaluator_validation = validate_prompt_specs()
+    evaluator_validation = validate_prompt_specs(args.prompts)
     if not evaluator_validation["all_passed"]:
         raise RuntimeError("Basin evaluator fixture validation failed")
 
@@ -434,7 +480,7 @@ def main() -> None:
                 "new --root"
             )
     manifest: dict[str, Any] = {
-        "protocol": CALIBRATION_PROTOCOL,
+        "protocol": design["protocol"],
         "status": "running",
         "created_at": existing.get("created_at", _utc_now()),
         "updated_at": _utc_now(),

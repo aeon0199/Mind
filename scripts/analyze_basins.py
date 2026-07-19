@@ -12,12 +12,22 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 
+from runtime_lab.basins.replication import (
+    M3R2_ANALYSIS_PROTOCOL,
+    M3R2_AUROC_THRESHOLD,
+    M3R2_CALIBRATION_PROTOCOL,
+    M3R2_MINIMUM_VALID_PROMPT_SPLITS,
+    M3R2_PREDICTOR_FEATURES,
+    M3R2_PREDICTOR_L2_REGULARIZATION,
+)
 from runtime_lab.core.io.hashing import hash_config
 
 
 ANALYSIS_PROTOCOL = "observer-m3r-prompt-held-out-analysis-v1"
+CALIBRATION_PROTOCOL = "observer-m3r-basin-calibration-v1"
 DEFAULT_AUROC_THRESHOLD = 0.70
 DEFAULT_MIN_VALID_SPLITS = 3
+DEFAULT_L2_REGULARIZATION = 1e-3
 
 
 def _utc_now() -> str:
@@ -273,6 +283,8 @@ def _build_predictor(
     *,
     threshold: float,
     minimum_valid_splits: int,
+    feature_allowlist: Sequence[str] | None = None,
+    l2_regularization: float = DEFAULT_L2_REGULARIZATION,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     predictor_rows: list[dict[str, Any]] = []
     for row in rows:
@@ -302,11 +314,15 @@ def _build_predictor(
             row["features"][f"prompt_class.{prompt_class}"] = float(
                 row["prompt_class"] == prompt_class
             )
-    feature_names = sorted(
-        {
+    available_features = {
+        feature
+        for row in predictor_rows
+        for feature in row["features"]
+    }
+    if feature_allowlist is None:
+        feature_names = sorted(
             feature
-            for row in predictor_rows
-            for feature in row["features"]
+            for feature in available_features
             if (
                 sum(
                     feature in candidate["features"]
@@ -315,8 +331,13 @@ def _build_predictor(
                 / max(1, len(predictor_rows))
             )
             >= 0.5
-        }
-    )
+        )
+    else:
+        feature_names = [
+            feature
+            for feature in feature_allowlist
+            if feature in available_features
+        ]
     if predictor_rows and feature_names:
         matrix = np.asarray(
             [
@@ -378,6 +399,7 @@ def _build_predictor(
                 train_features,
                 train_labels,
                 test_features,
+                l2_regularization=float(l2_regularization),
             )
         )
         precision, recall = _precision_recall(test_labels, test_scores)
@@ -455,6 +477,9 @@ def _build_predictor(
         "invalid_splits": invalid_splits,
         "aggregate": aggregate,
     }
+    if feature_allowlist is not None:
+        predictor["feature_set_source"] = "manifest_preregistered"
+        predictor["l2_regularization"] = float(l2_regularization)
     stop_condition = {
         "metric": "mean prompt-held-out AUROC",
         "threshold": float(threshold),
@@ -470,14 +495,74 @@ def _build_predictor(
 def analyze_basin_root(
     root: str | Path,
     *,
-    auroc_threshold: float = DEFAULT_AUROC_THRESHOLD,
-    minimum_valid_splits: int = DEFAULT_MIN_VALID_SPLITS,
+    auroc_threshold: float | None = None,
+    minimum_valid_splits: int | None = None,
 ) -> dict[str, Any]:
     root = Path(root).expanduser().resolve()
     manifest_path = root / "basin_manifest.json"
     manifest = _load_json(manifest_path)
-    if manifest.get("protocol") != "observer-m3r-basin-calibration-v1":
+    manifest_protocol = manifest.get("protocol")
+    if manifest_protocol not in {
+        CALIBRATION_PROTOCOL,
+        M3R2_CALIBRATION_PROTOCOL,
+    }:
         raise ValueError("Unexpected or missing M3R basin manifest protocol")
+    design = manifest.get("design") or {}
+    is_m3r2 = manifest_protocol == M3R2_CALIBRATION_PROTOCOL
+    if is_m3r2:
+        expected_design = {
+            "protocol": M3R2_CALIBRATION_PROTOCOL,
+            "prompt_set": "m3r2",
+            "predictor_feature_set": list(M3R2_PREDICTOR_FEATURES),
+            "predictor_l2_regularization": (
+                M3R2_PREDICTOR_L2_REGULARIZATION
+            ),
+            "minimum_valid_prompt_splits": (
+                M3R2_MINIMUM_VALID_PROMPT_SPLITS
+            ),
+            "auroc_threshold": M3R2_AUROC_THRESHOLD,
+        }
+        mismatched = [
+            key
+            for key, expected in expected_design.items()
+            if design.get(key) != expected
+        ]
+        if mismatched:
+            raise ValueError(
+                "M3R-2 manifest does not match the frozen design: "
+                f"{mismatched}"
+            )
+        feature_allowlist: Sequence[str] | None = tuple(
+            design["predictor_feature_set"]
+        )
+        l2_regularization = float(
+            design["predictor_l2_regularization"]
+        )
+        resolved_threshold = float(
+            design["auroc_threshold"]
+            if auroc_threshold is None
+            else auroc_threshold
+        )
+        resolved_minimum_splits = int(
+            design["minimum_valid_prompt_splits"]
+            if minimum_valid_splits is None
+            else minimum_valid_splits
+        )
+        analysis_protocol = M3R2_ANALYSIS_PROTOCOL
+    else:
+        feature_allowlist = None
+        l2_regularization = DEFAULT_L2_REGULARIZATION
+        resolved_threshold = float(
+            DEFAULT_AUROC_THRESHOLD
+            if auroc_threshold is None
+            else auroc_threshold
+        )
+        resolved_minimum_splits = int(
+            DEFAULT_MIN_VALID_SPLITS
+            if minimum_valid_splits is None
+            else minimum_valid_splits
+        )
+        analysis_protocol = ANALYSIS_PROTOCOL
     cells = manifest.get("cells") or {}
     if not isinstance(cells, Mapping):
         raise ValueError("Basin manifest cells must be an object")
@@ -542,8 +627,10 @@ def analyze_basin_root(
     active_no_flips = len(active_episodes) - selected_sampled_flips
     predictor, stop_condition = _build_predictor(
         active_episodes,
-        threshold=float(auroc_threshold),
-        minimum_valid_splits=int(minimum_valid_splits),
+        threshold=resolved_threshold,
+        minimum_valid_splits=resolved_minimum_splits,
+        feature_allowlist=feature_allowlist,
+        l2_regularization=l2_regularization,
     )
     prompt_keys = sorted(
         {str(row["prompt_key"]) for row in active_episodes}
@@ -585,11 +672,11 @@ def analyze_basin_root(
         for outcome in ("improve", "degrade", "tie")
     }
     return {
-        "analysis_protocol": ANALYSIS_PROTOCOL,
+        "analysis_protocol": analysis_protocol,
         "generated_at": _utc_now(),
         "artifact_root": str(root),
         "manifest_path": str(manifest_path),
-        "design": manifest.get("design") or {},
+        "design": design,
         "artifact_validation": {
             "manifest_status": manifest.get("status"),
             "expected_runs": int(manifest.get("cell_count", 0)),
@@ -763,12 +850,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--auroc-threshold",
         type=float,
-        default=DEFAULT_AUROC_THRESHOLD,
+        default=None,
     )
     parser.add_argument(
         "--minimum-valid-splits",
         type=int,
-        default=DEFAULT_MIN_VALID_SPLITS,
+        default=None,
     )
     parser.add_argument("--json-out", default=None)
     parser.add_argument("--markdown-out", default=None)
@@ -780,8 +867,8 @@ def main() -> None:
     root = Path(args.root).expanduser().resolve()
     report = analyze_basin_root(
         root,
-        auroc_threshold=float(args.auroc_threshold),
-        minimum_valid_splits=int(args.minimum_valid_splits),
+        auroc_threshold=args.auroc_threshold,
+        minimum_valid_splits=args.minimum_valid_splits,
     )
     json_path = (
         Path(args.json_out).expanduser().resolve()

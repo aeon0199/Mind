@@ -4,6 +4,14 @@ from pathlib import Path
 import pytest
 
 from runtime_lab.basins.evaluators import PROMPT_SPECS
+from runtime_lab.basins.replication import (
+    M3R2_ANALYSIS_PROTOCOL,
+    M3R2_AUROC_THRESHOLD,
+    M3R2_CALIBRATION_PROTOCOL,
+    M3R2_MINIMUM_VALID_PROMPT_SPLITS,
+    M3R2_PREDICTOR_FEATURES,
+    M3R2_PREDICTOR_L2_REGULARIZATION,
+)
 from runtime_lab.core.io.hashing import hash_config
 from scripts.analyze_basins import (
     analyze_basin_root,
@@ -103,6 +111,11 @@ def _make_artifact(root, *, prompt_count=5):
                             "pre_flip_features": {
                                 "clean_top1_margin": margin,
                                 "normalized_position": row_index / 4,
+                                "unregistered_signal": (
+                                    999999.0
+                                    if outcome == "improve"
+                                    else -999999.0
+                                ),
                                 "clean_diagnostics": {
                                     "hidden_velocity": margin * 2,
                                 },
@@ -257,6 +270,43 @@ def test_insufficient_prompt_splits_are_reported_not_promoted(tmp_path):
     assert report["predictor"]["valid_split_count"] == 0
     assert report["stop_condition"]["met"] is False
     assert report["stop_condition"]["status"] == "insufficient_valid_splits"
+
+
+def test_m3r2_analyzer_enforces_manifest_preregistered_predictor(tmp_path):
+    manifest = _make_artifact(tmp_path, prompt_count=5)
+    manifest["protocol"] = M3R2_CALIBRATION_PROTOCOL
+    manifest["design"].update(
+        {
+            "protocol": M3R2_CALIBRATION_PROTOCOL,
+            "prompt_set": "m3r2",
+            "predictor_feature_set": list(M3R2_PREDICTOR_FEATURES),
+            "predictor_l2_regularization": (
+                M3R2_PREDICTOR_L2_REGULARIZATION
+            ),
+            "minimum_valid_prompt_splits": (
+                M3R2_MINIMUM_VALID_PROMPT_SPLITS
+            ),
+            "auroc_threshold": M3R2_AUROC_THRESHOLD,
+        }
+    )
+    _write_json(tmp_path / "basin_manifest.json", manifest)
+
+    report = analyze_basin_root(tmp_path)
+
+    assert report["analysis_protocol"] == M3R2_ANALYSIS_PROTOCOL
+    assert report["predictor"]["feature_set_source"] == "manifest_preregistered"
+    assert report["predictor"]["l2_regularization"] == (
+        M3R2_PREDICTOR_L2_REGULARIZATION
+    )
+    assert set(report["predictor"]["feature_names"]) <= set(
+        M3R2_PREDICTOR_FEATURES
+    )
+    assert "unregistered_signal" not in report["predictor"]["feature_names"]
+    assert report["stop_condition"]["minimum_valid_splits"] == (
+        M3R2_MINIMUM_VALID_PROMPT_SPLITS
+    )
+    assert report["predictor"]["valid_split_count"] == 5
+    assert report["stop_condition"]["met"] is True
 
 
 def test_analyzer_rejects_tampered_config_hash(tmp_path):

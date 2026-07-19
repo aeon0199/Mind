@@ -4,11 +4,19 @@ from pathlib import Path
 
 import pytest
 
-from runtime_lab.basins.evaluators import PROMPT_SPECS
+from runtime_lab.basins.evaluators import M3R2_PROMPT_SPECS, PROMPT_SPECS
+from runtime_lab.basins.replication import (
+    M3R2_AUROC_THRESHOLD,
+    M3R2_CALIBRATION_PROTOCOL,
+    M3R2_MINIMUM_VALID_PROMPT_SPLITS,
+    M3R2_PREDICTOR_FEATURES,
+    M3R2_PREDICTOR_L2_REGULARIZATION,
+)
 from scripts.run_basin_calibration import (
     _build_design,
     _find_completed_summary,
     _run_cell,
+    _select_prompts,
     build_basin_cells,
     validate_cell_summary,
 )
@@ -31,6 +39,7 @@ def _args():
         top_k=0,
         intervention_seed=42,
         tie_tolerance=0.025,
+        prompt_set="m3r",
     )
 
 
@@ -60,6 +69,65 @@ def test_calibration_grid_has_ten_prompts_three_seeds_and_two_configs(tmp_path):
         for seed in (0, 1, 2)
         for magnitude in (0.0, 0.3)
     }
+
+
+def test_m3r2_grid_has_fifteen_fresh_prompts_and_ninety_cells(tmp_path):
+    cells = build_basin_cells(
+        root=tmp_path,
+        prompts=M3R2_PROMPT_SPECS,
+        seeds=[0, 1, 2],
+        magnitudes=[0.0, 0.3],
+    )
+
+    assert len(cells) == 90
+    assert len({cell["cell_id"] for cell in cells}) == 90
+    assert {cell["prompt_key"] for cell in cells} == {
+        spec.key for spec in M3R2_PROMPT_SPECS
+    }
+    assert {cell["prompt_class"] for cell in cells} == {
+        "factual",
+        "procedural",
+        "creative",
+        "reasoning",
+        "code",
+    }
+
+
+def test_m3r2_design_records_the_preregistered_analysis_boundary():
+    args = _args()
+    args.prompt_set = "m3r2"
+    args.prompts = list(M3R2_PROMPT_SPECS)
+    args.max_tokens = 64
+    args.continuation_tokens = 96
+    args.max_episodes = 5
+
+    design = _build_design(args, backend_result=make_fake_backend())
+
+    assert design["protocol"] == M3R2_CALIBRATION_PROTOCOL
+    assert design["prompt_set"] == "m3r2"
+    assert design["max_tokens"] == 64
+    assert design["continuation_tokens"] == 96
+    assert design["max_episodes"] == 5
+    assert design["predictor_feature_set"] == list(M3R2_PREDICTOR_FEATURES)
+    assert (
+        design["predictor_l2_regularization"]
+        == M3R2_PREDICTOR_L2_REGULARIZATION
+    )
+    assert (
+        design["minimum_valid_prompt_splits"]
+        == M3R2_MINIMUM_VALID_PROMPT_SPLITS
+    )
+    assert design["auroc_threshold"] == M3R2_AUROC_THRESHOLD
+
+
+def test_prompt_set_selection_is_disjoint_and_fails_closed():
+    assert _select_prompts(["all"], prompt_set="m3r") == list(PROMPT_SPECS)
+    assert _select_prompts(["all"], prompt_set="m3r2") == list(
+        M3R2_PROMPT_SPECS
+    )
+
+    with pytest.raises(ValueError, match="Unknown m3r2 basin prompt"):
+        _select_prompts(["water_cycle"], prompt_set="m3r2")
 
 
 def test_zero_cell_runs_and_passes_fail_closed_validation(tmp_path):
