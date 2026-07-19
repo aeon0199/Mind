@@ -1065,6 +1065,10 @@ def run_basin_experiment(
     }
     metrics = {
         "branchpoint_rows": len(branchpoint_rows),
+        "local_effect_rows": sum(
+            int(_has_measurable_local_effect(row))
+            for row in branchpoint_rows
+        ),
         "argmax_flips": sum(
             int(row["argmax_flip"]) for row in branchpoint_rows
         ),
@@ -1072,6 +1076,22 @@ def run_basin_experiment(
             int(row["sampled_flip"]) for row in branchpoint_rows
         ),
         "selected_episodes": len(episodes),
+        "mean_logit_kl": (
+            float(
+                sum(float(row["logit_kl"]) for row in branchpoint_rows)
+                / len(branchpoint_rows)
+            )
+            if branchpoint_rows
+            else 0.0
+        ),
+        "mean_logit_js": (
+            float(
+                sum(float(row["logit_js"]) for row in branchpoint_rows)
+                / len(branchpoint_rows)
+            )
+            if branchpoint_rows
+            else 0.0
+        ),
         "selected_sampled_flips": sum(
             int(row["local_counterfactual"]["sampled_flip"])
             for row in episodes
