@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from . import branchpoints as branchpoints_cli
+from . import basins as basins_cli
 from . import control as control_cli
 from . import hysteresis as hysteresis_cli
 from . import observe as observe_cli
@@ -25,6 +26,12 @@ def main() -> None:
         help="Independent local counterfactual branchpoint map",
     )
     branchpoints_cli.add_branchpoint_args(branchpoint_parser)
+
+    basin_parser = sub.add_parser(
+        "basins",
+        help="Causal local-fork continuations with blinded outcome scoring",
+    )
+    basins_cli.add_basin_args(basin_parser)
 
     propagation_parser = sub.add_parser(
         "propagation",
@@ -49,6 +56,8 @@ def main() -> None:
         stress_cli.run_from_args(args)
     elif args.mode == "branchpoints":
         branchpoints_cli.run_from_args(args)
+    elif args.mode == "basins":
+        basins_cli.run_from_args(args)
     elif args.mode == "propagation":
         propagation_cli.run_from_args(args)
     elif args.mode == "hysteresis":

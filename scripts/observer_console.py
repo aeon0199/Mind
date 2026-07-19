@@ -47,6 +47,7 @@ def infer_mode(run_name: str) -> str:
         "observe",
         "stress",
         "branchpoints",
+        "basins",
         "propagation",
         "hysteresis",
         "control",
@@ -165,6 +166,22 @@ def summarize_run(run_dir: Path) -> Dict[str, Any]:
             "mean_logit_kl": metrics.get("mean_logit_kl"),
             "argmax_flip_rate": metrics.get("argmax_flip_rate"),
         })
+    elif mode == "basins":
+        metrics = summary.get("metrics", {}) or {}
+        outcomes = metrics.get("outcomes", {}) or {}
+        headline.update({
+            "branchpoint_rows": metrics.get("branchpoint_rows"),
+            "selected_episodes": metrics.get("selected_episodes"),
+            "selected_sampled_flips": metrics.get(
+                "selected_sampled_flips"
+            ),
+            "improve": outcomes.get("improve"),
+            "degrade": outcomes.get("degrade"),
+            "tie": outcomes.get("tie"),
+            "identity_control_exact": metrics.get(
+                "identity_control_exact"
+            ),
+        })
     elif mode == "control":
         headline.update({
             "avg_raw_div_mean": summary.get("avg_raw_div_mean"),
@@ -232,6 +249,15 @@ def run_detail(run_dir: Path) -> Dict[str, Any]:
             pass
         detail["events"] = events
 
+    if mode == "basins":
+        detail["branchpoints"] = _read_jsonl(
+            run_dir / "branchpoints.jsonl"
+        )
+        detail["episodes"] = _read_jsonl(run_dir / "episodes.jsonl")
+        detail["trajectories"] = _read_jsonl(
+            run_dir / "trajectories.jsonl"
+        )
+
     if mode == "hysteresis":
         detail["outputs"] = {
             "clean_exposure": _read_text(
@@ -258,6 +284,17 @@ def _read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except Exception:
         return ""
+
+
+def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
+    try:
+        return [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    except Exception:
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -312,6 +349,7 @@ def build_cli_command(payload: Dict[str, Any]) -> List[str]:
         "observe",
         "stress",
         "branchpoints",
+        "basins",
         "propagation",
         "hysteresis",
         "control",
@@ -333,7 +371,13 @@ def build_cli_command(payload: Dict[str, Any]) -> List[str]:
     cmd += ["--max-tokens", str(max_tokens), "--seed", str(seed)]
 
     probe_layers = str(payload.get("probe_layers") or "auto")
-    if mode in ("observe", "stress", "branchpoints", "control"):
+    if mode in (
+        "observe",
+        "stress",
+        "branchpoints",
+        "basins",
+        "control",
+    ):
         cmd += ["--probe-layers", probe_layers]
 
     seeds_spec = payload.get("seeds")
@@ -351,7 +395,7 @@ def build_cli_command(payload: Dict[str, Any]) -> List[str]:
         if key in payload and payload[key] is not None:
             cmd.extend([flag, cast(payload[key])])
 
-    if mode in ("stress", "branchpoints", "propagation"):
+    if mode in ("stress", "branchpoints", "basins", "propagation"):
         _pass("layer", "--layer")
         _pass("intervention_type", "--type")
         _pass("magnitude", "--magnitude", lambda value: str(float(value)))
@@ -360,6 +404,25 @@ def build_cli_command(payload: Dict[str, Any]) -> List[str]:
         if mode == "stress":
             _pass("start", "--start", lambda value: str(int(value)))
             _pass("duration", "--duration", lambda value: str(int(value)))
+        if mode == "basins":
+            prompt_key = str(payload.get("prompt_key") or "custom")
+            cmd += ["--prompt-key", prompt_key]
+            _pass("prompt_class", "--prompt-class")
+            _pass(
+                "continuation_tokens",
+                "--continuation-tokens",
+                lambda value: str(int(value)),
+            )
+            _pass(
+                "max_episodes",
+                "--max-episodes",
+                lambda value: str(int(value)),
+            )
+            _pass(
+                "tie_tolerance",
+                "--tie-tolerance",
+                lambda value: str(float(value)),
+            )
     elif mode == "hysteresis":
         perturbation_mode = str(payload.get("perturbation_mode") or "noise")
         cmd += ["--perturbation-mode", perturbation_mode]
@@ -400,6 +463,7 @@ class JobManager:
             "observe",
             "stress",
             "branchpoints",
+            "basins",
             "propagation",
             "hysteresis",
             "control",
@@ -555,7 +619,11 @@ class JobManager:
             return
 
         # Stream events.jsonl if it exists (observe/stress/control).
-        events_path = run_dir / "events.jsonl"
+        events_path = (
+            run_dir / "branchpoints.jsonl"
+            if mode == "basins"
+            else run_dir / "events.jsonl"
+        )
         offset = 0
         buffer = ""
         while True:
@@ -675,6 +743,35 @@ _MODES_DOC: Dict[str, Dict[str, Any]] = {
             "intervention_seed": "(int) perturbation direction seed",
         },
     },
+    "basins": {
+        "description": (
+            "causal-branch-continuation-v1: map independent same-context "
+            "local forks, outcome-blindly select early/middle/late "
+            "branchpoints, replay them, then continue clean and perturbed "
+            "branches with no further intervention and paired per-position "
+            "sampling randomness."
+        ),
+        "useful_for": [
+            "Testing whether a local token flip changes task outcome",
+            "Separating local flips, latent divergence, ties, and exact no-effects",
+            "Building controller-free basin outcome labels",
+        ],
+        "params": {
+            "prompt_key": (
+                "registered M3R prompt key, or custom for an exploratory "
+                "generic rubric"
+            ),
+            "prompt": (
+                "required for custom; registered prompts must match exactly"
+            ),
+            "layer": "(str|int) intervention layer",
+            "type": "additive | projection | scaling",
+            "magnitude": "(float) relative by default",
+            "continuation_tokens": "(int) no-intervention tokens per branch",
+            "max_episodes": "(int) outcome-blind selected forks per run",
+            "tie_tolerance": "(float) score delta treated as a tie",
+        },
+    },
     "propagation": {
         "description": (
             "same-context-layer-propagation-v1: independent one-step "
@@ -731,6 +828,8 @@ _MODES_DOC: Dict[str, Dict[str, Any]] = {
 
 def _capabilities_payload() -> Dict[str, Any]:
     registry = load_registry()
+    from runtime_lab.basins.evaluators import PROMPT_SPECS
+
     return {
         "version": "0.2.0-llm-first",
         "description": (
@@ -753,6 +852,15 @@ def _capabilities_payload() -> Dict[str, Any]:
         "models": registry.get("models", []),
         "default_model": registry.get("default_model"),
         "modes": _MODES_DOC,
+        "registered_basin_prompts": [
+            {
+                "key": spec.key,
+                "prompt_class": spec.prompt_class,
+                "prompt": spec.prompt,
+                "evaluator_id": spec.evaluator_id,
+            }
+            for spec in PROMPT_SPECS
+        ],
         "advisories": {
             "description": (
                 "Every completed run's summary.json contains `advisory`, a structured block with "
@@ -808,6 +916,23 @@ _RECIPES: Dict[str, Dict[str, Any]] = {
             "intervention_type": "additive",
             "magnitude": 0.2,
             "max_tokens": 32,
+        },
+    },
+    "causal-basin-map": {
+        "description": (
+            "Controller-free local fork continuation using a registered "
+            "task-specific outcome rubric."
+        ),
+        "mode": "basins",
+        "payload": {
+            "prompt_key": "water_cycle",
+            "layer": "late",
+            "intervention_type": "additive",
+            "magnitude": 0.3,
+            "max_tokens": 48,
+            "continuation_tokens": 48,
+            "max_episodes": 3,
+            "temperature": 0.8,
         },
     },
     "stress-logit-kl": {

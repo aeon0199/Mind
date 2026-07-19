@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from scripts import observer_console, observer_daemon
+from runtime_lab.basins.evaluators import get_prompt_spec
 from runtime_lab.core.backend.loader import load_model_with_backend
 from tests.fakes import make_fake_backend
 
@@ -157,6 +158,81 @@ def test_daemon_dispatches_propagation_with_the_warm_backend(tmp_path):
     assert result["summary"]["protocol_validity"][
         "terminal_capture_complete"
     ] is True
+
+
+def test_daemon_and_console_expose_causal_basins():
+    spec = get_prompt_spec("water_cycle")
+    cfg = observer_daemon._build_config_basins(
+        {
+            "prompt_key": spec.key,
+            "layer": "late",
+            "magnitude": 0.3,
+            "continuation_tokens": 24,
+            "max_episodes": 3,
+            "seed": 0,
+        },
+        num_layers=6,
+    )
+    command = observer_console.build_cli_command(
+        {
+            "mode": "basins",
+            "prompt_key": spec.key,
+            "prompt": spec.prompt,
+            "layer": 5,
+            "magnitude": 0.3,
+            "continuation_tokens": 24,
+            "max_episodes": 3,
+            "seed": 0,
+        }
+    )
+
+    assert cfg.prompt == spec.prompt
+    assert cfg.prompt_class == "factual"
+    assert cfg.intervention_layer == 5
+    assert cfg.continuation_tokens == 24
+    assert cfg.max_episodes == 3
+    assert "basins" in command
+    assert command[command.index("--prompt-key") + 1] == "water_cycle"
+    assert command[command.index("--continuation-tokens") + 1] == "24"
+    assert observer_console.infer_mode("basins_run_abc") == "basins"
+    assert "basins" in observer_console._MODES_DOC
+
+
+def test_daemon_dispatches_basins_with_the_warm_backend(tmp_path):
+    result = observer_daemon._run_request(
+        {
+            "mode": "basins",
+            "prompt_key": "water_cycle",
+            "layer": 0,
+            "magnitude": 0.0,
+            "max_tokens": 4,
+            "continuation_tokens": 2,
+            "runs_dir": str(tmp_path),
+        },
+        make_fake_backend(),
+    )
+
+    assert result["ok"] is True
+    assert result["mode"] == "basins"
+    assert result["summary"]["metrics"]["identity_control_exact"] is True
+
+
+def test_console_static_ui_exposes_basins_mode():
+    html = (
+        ROOT / "scripts" / "observer_console" / "index.html"
+    ).read_text()
+    javascript = (
+        ROOT / "scripts" / "observer_console" / "app.js"
+    ).read_text()
+    stylesheet = (
+        ROOT / "scripts" / "observer_console" / "styles.css"
+    ).read_text()
+
+    assert 'data-mode="basins"' in html
+    assert 'data-filter="basins"' in html
+    assert 'data-for="basins"' in html
+    assert "state.mode === 'basins'" in javascript
+    assert '.run-mode[data-mode="basins"]' in stylesheet
 
 
 def test_nnsight_remote_fails_before_loading_with_an_honest_boundary():

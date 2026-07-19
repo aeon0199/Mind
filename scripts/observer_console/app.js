@@ -593,6 +593,11 @@ function buildRunCard(run) {
     if (h.injection_relative != null) tiles.push(['inject rel', fmtNum(h.injection_relative, 3)]);
     if (h.final_norm_relative != null) tiles.push(['final rel', fmtNum(h.final_norm_relative, 3)]);
     if (h.mean_logit_kl != null) tiles.push(['logit KL', fmtNum(h.mean_logit_kl, 4)]);
+  } else if (run.mode === 'basins') {
+    if (h.selected_sampled_flips != null) tiles.push(['selected flips', h.selected_sampled_flips]);
+    if (h.improve != null) tiles.push(['improve', h.improve, 'good']);
+    if (h.degrade != null) tiles.push(['degrade', h.degrade, 'warn']);
+    if (h.tie != null) tiles.push(['ties', h.tie]);
   } else if (run.mode === 'sweep') {
     if (h.n_seeds != null) tiles.push(['seeds', `${h.n_ok ?? h.n_seeds}/${h.n_seeds}`, 'good']);
     if (h.avg_divergence != null) tiles.push(['avg div', `${fmtNum(h.avg_divergence, 3)} ± ${fmtNum(h.avg_divergence_std, 3)}`, 'accent']);
@@ -712,6 +717,16 @@ async function openRunDetail(runId) {
     body.appendChild(sectionTitle('Same-context downstream propagation'));
     body.appendChild(buildChartDiv('detail-chart-propagation'));
     setTimeout(() => renderPropagationDetailChart(summary), 40);
+  }
+
+  if (mode === 'basins') {
+    body.appendChild(sectionTitle('Causal branch continuations'));
+    body.appendChild(renderBasinEpisodes(detail.episodes || []));
+    body.appendChild(sectionTitle('Outcome-blind local map'));
+    const pre = document.createElement('pre');
+    pre.className = 'log-feed';
+    pre.textContent = JSON.stringify(detail.branchpoints || [], null, 2);
+    body.appendChild(pre);
   }
 
   if (mode === 'control' && detail.events) {
@@ -1000,6 +1015,23 @@ function buildMetricsRow(mode, summary, detail) {
     tiles.push(['argmax flip rate', fmtNum(m.argmax_flip_rate, 3), 'warn']);
   }
 
+  if (mode === 'basins') {
+    const m = summary.metrics || {};
+    const outcomes = m.outcomes || {};
+    const validity = summary.protocol_validity || {};
+    tiles.push(['local rows', m.branchpoint_rows ?? '—', 'accent']);
+    tiles.push(['selected episodes', m.selected_episodes ?? '—', 'signal']);
+    tiles.push(['selected flips', m.selected_sampled_flips ?? '—', 'warn']);
+    tiles.push(['improve', outcomes.improve ?? '—', 'good']);
+    tiles.push(['degrade', outcomes.degrade ?? '—', 'warn']);
+    tiles.push(['ties', outcomes.tie ?? '—']);
+    tiles.push([
+      'clean replay',
+      validity.clean_reference_replay_exact ? 'exact' : 'invalid',
+      validity.clean_reference_replay_exact ? 'good' : 'warn',
+    ]);
+  }
+
   tiles.forEach(([label, value, cls]) => {
     const tile = document.createElement('div');
     tile.className = 'metric-tile';
@@ -1153,6 +1185,7 @@ function applyAdvisoryAction(detail, action) {
     'hysteresis',
     'stress',
     'branchpoints',
+    'basins',
     'propagation',
     'control',
   ].includes(mode)) {
@@ -1189,7 +1222,12 @@ function applyConfigToForm(mode, cfg) {
   setInputValue('#f-seed', cfg.seed);
   setInputValue('#f-probe-layers', cfg.probe_layers);
 
-  if (mode === 'stress' || mode === 'branchpoints' || mode === 'propagation') {
+  if (
+    mode === 'stress'
+    || mode === 'branchpoints'
+    || mode === 'basins'
+    || mode === 'propagation'
+  ) {
     setInputValue('#f-layer', cfg.layer);
     setInputValue('#f-intervention', cfg.intervention_type);
     setInputValue('#f-magnitude', cfg.magnitude);
@@ -1197,6 +1235,12 @@ function applyConfigToForm(mode, cfg) {
     if (mode === 'stress') {
       setInputValue('#f-start', cfg.start);
       setInputValue('#f-duration', cfg.duration);
+    }
+    if (mode === 'basins') {
+      setInputValue('#f-basin-prompt-key', cfg.prompt_key);
+      setInputValue('#f-continuation-tokens', cfg.continuation_tokens);
+      setInputValue('#f-max-episodes', cfg.max_episodes);
+      setInputValue('#f-tie-tolerance', cfg.tie_tolerance);
     }
   }
   if (mode === 'hysteresis') {
@@ -1364,6 +1408,34 @@ function renderControlCharts(events) {
   }, PLOTLY_CONFIG);
 }
 
+function renderBasinEpisodes(episodes) {
+  const wrap = document.createElement('div');
+  wrap.className = 'detail-outputs';
+  if (!episodes.length) {
+    wrap.innerHTML = '<div class="empty-state">No continuation episodes were captured.</div>';
+    return wrap;
+  }
+  episodes.forEach((episode) => {
+    const comparison = episode.score_comparison || {};
+    const box = document.createElement('div');
+    box.className = 'detail-output-box';
+    box.innerHTML = `
+      <div class="detail-output-label">
+        ${escapeHTML(episode.position_band || '?').toUpperCase()}
+        · decision ${episode.decision_index}
+        · ${escapeHTML(comparison.outcome || '?').toUpperCase()}
+        · Δ ${fmtNum(comparison.score_delta, 4)}
+      </div>
+      <div class="detail-output-label">CLEAN</div>
+      <pre>${escapeHTML(episode.clean_output || '')}</pre>
+      <div class="detail-output-label">PERTURBED</div>
+      <pre>${escapeHTML(episode.perturbed_output || '')}</pre>
+    `;
+    wrap.appendChild(box);
+  });
+  return wrap;
+}
+
 function buildPhaseOutputs(outputs) {
   const wrap = document.createElement('div');
   wrap.className = 'detail-outputs';
@@ -1410,6 +1482,7 @@ function buildPayload() {
   if (
     state.mode === 'stress'
     || state.mode === 'branchpoints'
+    || state.mode === 'basins'
     || state.mode === 'propagation'
   ) {
     payload.layer = parseInt($('#f-layer').value, 10);
@@ -1419,6 +1492,12 @@ function buildPayload() {
     if (state.mode === 'stress') {
       payload.start = parseInt($('#f-start').value, 10);
       payload.duration = parseInt($('#f-duration').value, 10);
+    }
+    if (state.mode === 'basins') {
+      payload.prompt_key = $('#f-basin-prompt-key').value.trim() || 'custom';
+      payload.continuation_tokens = parseInt($('#f-continuation-tokens').value, 10);
+      payload.max_episodes = parseInt($('#f-max-episodes').value, 10);
+      payload.tie_tolerance = parseFloat($('#f-tie-tolerance').value);
     }
   }
   if (state.mode === 'hysteresis') {

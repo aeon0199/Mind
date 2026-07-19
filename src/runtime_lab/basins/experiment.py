@@ -10,6 +10,7 @@ import torch
 
 from runtime_lab.basins.evaluators import (
     BasinPromptSpec,
+    build_generic_prompt_spec,
     compare_outputs,
     get_prompt_spec,
     score_output,
@@ -590,7 +591,16 @@ def _validate_prompt_config(
     config: BasinConfig,
     prompt_spec: BasinPromptSpec | None,
 ) -> BasinPromptSpec:
-    spec = prompt_spec or get_prompt_spec(config.prompt_key)
+    if prompt_spec is not None:
+        spec = prompt_spec
+    elif str(config.prompt_key) == "custom":
+        spec = build_generic_prompt_spec(
+            config.prompt,
+            key=config.prompt_key,
+            prompt_class=config.prompt_class,
+        )
+    else:
+        spec = get_prompt_spec(config.prompt_key)
     if str(config.prompt) != spec.prompt:
         raise ValueError(
             "Basin config prompt does not match registered prompt "
@@ -708,7 +718,7 @@ def run_basin_experiment(
     }
     run_id, run_dir = create_run_dir(
         runs_dir or os.environ.get("RUNS_DIR", "runs"),
-        "basin",
+        "basins",
     )
     config_hash, config_path = write_config_record(run_dir, run_config)
     run_dir = Path(run_dir)

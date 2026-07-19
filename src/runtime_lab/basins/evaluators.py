@@ -480,6 +480,39 @@ PROMPT_SPECS = (
 _PROMPT_TABLE = {spec.key: spec for spec in PROMPT_SPECS}
 
 
+def build_generic_prompt_spec(
+    prompt: str,
+    *,
+    key: str = "custom",
+    prompt_class: str = "custom",
+) -> BasinPromptSpec:
+    """Build an exploratory rubric that makes no task-specific quality claim."""
+    prompt = str(prompt).strip()
+    if not prompt:
+        raise ValueError("A custom basin prompt must not be empty")
+    return BasinPromptSpec(
+        key=str(key),
+        prompt_class=str(prompt_class),
+        prompt=prompt,
+        rubric=(
+            _check(
+                "usable_length",
+                "word_count_range",
+                1.0,
+                minimum=20,
+                maximum=240,
+            ),
+            _check("low_repetition", "low_repetition", 1.0, ngram=3),
+        ),
+        good_fixture=(
+            "This is a complete exploratory response with enough distinct "
+            "words to evaluate basic length and repetition without claiming "
+            "that the rubric measures factual or semantic quality."
+        ),
+        degraded_fixture="",
+    )
+
+
 def get_prompt_spec(key: str) -> BasinPromptSpec:
     try:
         return _PROMPT_TABLE[str(key)]
