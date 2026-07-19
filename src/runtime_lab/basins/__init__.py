@@ -1,6 +1,8 @@
 """Controller-free causal basin mapping and outcome evaluation."""
 
 from runtime_lab.basins.evaluators import (
+    ALL_PROMPT_SPECS,
+    M3R2_PROMPT_SPECS,
     PROMPT_SPECS,
     BasinPromptSpec,
     build_generic_prompt_spec,
@@ -11,6 +13,8 @@ from runtime_lab.basins.evaluators import (
 from runtime_lab.basins.experiment import run_basin_experiment
 
 __all__ = [
+    "ALL_PROMPT_SPECS",
+    "M3R2_PROMPT_SPECS",
     "PROMPT_SPECS",
     "BasinPromptSpec",
     "build_generic_prompt_spec",
