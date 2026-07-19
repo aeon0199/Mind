@@ -43,7 +43,14 @@ def read_json(path: Path) -> Optional[Dict[str, Any]]:
 
 
 def infer_mode(run_name: str) -> str:
-    for mode in ("observe", "stress", "branchpoints", "hysteresis", "control"):
+    for mode in (
+        "observe",
+        "stress",
+        "branchpoints",
+        "propagation",
+        "hysteresis",
+        "control",
+    ):
         if run_name.startswith(f"{mode}_run_"):
             return mode
     if run_name.startswith("sweep_"):
@@ -136,6 +143,27 @@ def summarize_run(run_dir: Path) -> Dict[str, Any]:
             "rows": (summary.get("protocol_validity") or {}).get("rows"),
             "argmax_flip_rate": metrics.get("argmax_flip_rate"),
             "sampled_flip_rate": metrics.get("sampled_flip_rate"),
+        })
+    elif mode == "propagation":
+        metrics = summary.get("metrics", {}) or {}
+        layer = str((summary.get("capture_layers") or [""])[0])
+        injection = (
+            (metrics.get("layer_summary") or {}).get(layer) or {}
+        )
+        terminal = (
+            (metrics.get("terminal_summary") or {}).get("final_norm")
+            or {}
+        )
+        headline.update({
+            "rows": (summary.get("protocol_validity") or {}).get("rows"),
+            "injection_relative": (
+                (injection.get("delta_relative_clean") or {}).get("mean")
+            ),
+            "final_norm_relative": (
+                (terminal.get("delta_relative_clean") or {}).get("mean")
+            ),
+            "mean_logit_kl": metrics.get("mean_logit_kl"),
+            "argmax_flip_rate": metrics.get("argmax_flip_rate"),
         })
     elif mode == "control":
         headline.update({
@@ -284,6 +312,7 @@ def build_cli_command(payload: Dict[str, Any]) -> List[str]:
         "observe",
         "stress",
         "branchpoints",
+        "propagation",
         "hysteresis",
         "control",
     ):
@@ -322,7 +351,7 @@ def build_cli_command(payload: Dict[str, Any]) -> List[str]:
         if key in payload and payload[key] is not None:
             cmd.extend([flag, cast(payload[key])])
 
-    if mode in ("stress", "branchpoints"):
+    if mode in ("stress", "branchpoints", "propagation"):
         _pass("layer", "--layer")
         _pass("intervention_type", "--type")
         _pass("magnitude", "--magnitude", lambda value: str(float(value)))
@@ -371,6 +400,7 @@ class JobManager:
             "observe",
             "stress",
             "branchpoints",
+            "propagation",
             "hysteresis",
             "control",
         ):
@@ -645,6 +675,24 @@ _MODES_DOC: Dict[str, Dict[str, Any]] = {
             "intervention_seed": "(int) perturbation direction seed",
         },
     },
+    "propagation": {
+        "description": (
+            "same-context-layer-propagation-v1: independent one-step "
+            "clean/perturbed forks that capture the paired delta at every "
+            "downstream transformer block and the model's final normalization."
+        ),
+        "useful_for": [
+            "Mapping where an injected hidden-state delta grows or contracts",
+            "Separating raw L2 growth from relative and angular disruption",
+            "Detecting perturbations absorbed by final normalization",
+        ],
+        "params": {
+            "layer": "(str|int) injection layer",
+            "type": "additive | projection | scaling",
+            "magnitude": "(float) relative by default",
+            "intervention_seed": "(int) perturbation direction seed",
+        },
+    },
     "hysteresis": {
         "description": (
             "matched-exposure-recovery-v2: clean and perturbed branches "
@@ -747,6 +795,19 @@ _RECIPES: Dict[str, Dict[str, Any]] = {
             "intervention_type": "additive",
             "magnitude": 0.15,
             "max_tokens": 64,
+        },
+    },
+    "downstream-propagation-map": {
+        "description": (
+            "Same-context one-step delta curve through all downstream layers "
+            "and final normalization."
+        ),
+        "mode": "propagation",
+        "payload": {
+            "layer": "mid",
+            "intervention_type": "additive",
+            "magnitude": 0.2,
+            "max_tokens": 32,
         },
     },
     "stress-logit-kl": {

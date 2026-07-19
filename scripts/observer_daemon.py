@@ -5,7 +5,8 @@ Each line is dispatched to the matching runner with prebuilt_backend so the
 4-second per-run model-load overhead vanishes.
 
 Protocol (stdin → stdout):
-    IN  : {"mode": "observe"|"stress"|"branchpoints"|"hysteresis"|"control", ...}
+    IN  : {"mode": "observe"|"stress"|"branchpoints"|"propagation"|
+           "hysteresis"|"control", ...}
     OUT : {"ok": true, "run_dir": "...", "summary_path": "..."}    on success
           {"ok": false, "error": "..."}                             on failure
     Every line of stdout is a single JSON object terminated by newline, so
@@ -178,6 +179,37 @@ def _build_config_branchpoints(cfg: Dict[str, Any], num_layers: int):
     )
 
 
+def _build_config_propagation(cfg: Dict[str, Any], num_layers: int):
+    from runtime_lab.cli._common import resolve_semantic_layer
+    from runtime_lab.config.schemas import PropagationConfig
+
+    layer = resolve_semantic_layer(cfg.get("layer", "mid"), num_layers)
+    return PropagationConfig(
+        prompt=cfg["prompt"],
+        model_key=cfg.get("model", cfg.get("model_key")),
+        max_new_tokens=_int_with_default(
+            cfg.get("max_tokens", cfg.get("max_new_tokens")),
+            32,
+        ),
+        backend=cfg.get("backend", "hf"),
+        seed=_int_with_default(cfg.get("seed"), 42),
+        intervention_layer=int(layer),
+        intervention_type=str(cfg.get("intervention_type", "additive")),
+        intervention_magnitude=float(cfg.get("magnitude", 0.15)),
+        intervention_magnitude_relative=(
+            not cfg.get("absolute_magnitude", False)
+        ),
+        intervention_seed=int(cfg.get("intervention_seed", 42)),
+        projection_subspace_dim=max(
+            1,
+            int(cfg.get("projection_subspace_dim", 1)),
+        ),
+        temperature=float(cfg.get("temperature", 0.0)),
+        top_p=float(cfg.get("top_p", 1.0)),
+        top_k=int(cfg.get("top_k", 0)),
+    )
+
+
 def _build_config_control(cfg: Dict[str, Any], num_layers: int | None = None):
     from runtime_lab.config.schemas import ControlConfig
     from runtime_lab.cli._common import resolve_semantic_layer
@@ -279,6 +311,20 @@ def _run_request(request: Dict[str, Any], backend) -> Dict[str, Any]:
             registry_path=registry_path,
             runs_dir=runs_dir,
             diagnostics_config=diag,
+            prebuilt_backend=backend,
+        )
+        return {"ok": True, "mode": mode, "summary": summary}
+
+    if mode == "propagation":
+        from runtime_lab.propagation.experiment import (
+            run_propagation_experiment,
+        )
+
+        cfg = _build_config_propagation(cfg_values, num_layers)
+        summary = run_propagation_experiment(
+            config=cfg,
+            registry_path=registry_path,
+            runs_dir=runs_dir,
             prebuilt_backend=backend,
         )
         return {"ok": True, "mode": mode, "summary": summary}

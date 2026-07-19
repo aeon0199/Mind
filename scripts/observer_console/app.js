@@ -134,6 +134,9 @@ function switchMode(mode) {
   $$('.mode-options').forEach((el) => {
     el.hidden = !el.dataset.for.split(',').includes(mode);
   });
+  $$('[data-only-for]').forEach((el) => {
+    el.hidden = !el.dataset.onlyFor.split(',').includes(mode);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -586,6 +589,10 @@ function buildRunCard(run) {
   } else if (run.mode === 'control') {
     if (h.avg_raw_div_mean != null) tiles.push(['avg div', fmtNum(h.avg_raw_div_mean, 3)]);
     if (h.avg_score_mean != null) tiles.push(['score', fmtNum(h.avg_score_mean, 3)]);
+  } else if (run.mode === 'propagation') {
+    if (h.injection_relative != null) tiles.push(['inject rel', fmtNum(h.injection_relative, 3)]);
+    if (h.final_norm_relative != null) tiles.push(['final rel', fmtNum(h.final_norm_relative, 3)]);
+    if (h.mean_logit_kl != null) tiles.push(['logit KL', fmtNum(h.mean_logit_kl, 4)]);
   } else if (run.mode === 'sweep') {
     if (h.n_seeds != null) tiles.push(['seeds', `${h.n_ok ?? h.n_seeds}/${h.n_seeds}`, 'good']);
     if (h.avg_divergence != null) tiles.push(['avg div', `${fmtNum(h.avg_divergence, 3)} ± ${fmtNum(h.avg_divergence_std, 3)}`, 'accent']);
@@ -699,6 +706,12 @@ async function openRunDetail(runId) {
     setTimeout(() => {
       renderHysteresisDetailCharts(summary);
     }, 40);
+  }
+
+  if (mode === 'propagation') {
+    body.appendChild(sectionTitle('Same-context downstream propagation'));
+    body.appendChild(buildChartDiv('detail-chart-propagation'));
+    setTimeout(() => renderPropagationDetailChart(summary), 40);
   }
 
   if (mode === 'control' && detail.events) {
@@ -966,6 +979,27 @@ function buildMetricsRow(mode, summary, detail) {
     tiles.push(['sampled flip rate', fmtNum(m.sampled_flip_rate, 3), 'signal']);
   }
 
+  if (mode === 'propagation') {
+    const m = summary.metrics || {};
+    const validity = summary.protocol_validity || {};
+    const firstLayer = String((summary.capture_layers || [])[0] ?? '');
+    const injection = m.layer_summary?.[firstLayer] || {};
+    const terminal = m.terminal_summary?.final_norm || {};
+    tiles.push(['paired rows', validity.rows ?? '—', 'accent']);
+    tiles.push([
+      'injection rel.',
+      fmtNum(injection.delta_relative_clean?.mean, 3),
+      'warn',
+    ]);
+    tiles.push([
+      'final norm rel.',
+      fmtNum(terminal.delta_relative_clean?.mean, 3),
+      'signal',
+    ]);
+    tiles.push(['mean logit KL', fmtNum(m.mean_logit_kl, 4), 'accent']);
+    tiles.push(['argmax flip rate', fmtNum(m.argmax_flip_rate, 3), 'warn']);
+  }
+
   tiles.forEach(([label, value, cls]) => {
     const tile = document.createElement('div');
     tile.className = 'metric-tile';
@@ -1114,7 +1148,14 @@ function applyAdvisoryAction(detail, action) {
 
   // Switch to Launch tab
   try { switchView('launch'); } catch (e) { /* fall through */ }
-  if (mode && ['observe', 'hysteresis', 'stress', 'control'].includes(mode)) {
+  if (mode && [
+    'observe',
+    'hysteresis',
+    'stress',
+    'branchpoints',
+    'propagation',
+    'control',
+  ].includes(mode)) {
     try { switchMode(mode); } catch (e) { /* ignore */ }
   }
 
@@ -1148,13 +1189,15 @@ function applyConfigToForm(mode, cfg) {
   setInputValue('#f-seed', cfg.seed);
   setInputValue('#f-probe-layers', cfg.probe_layers);
 
-  if (mode === 'stress') {
+  if (mode === 'stress' || mode === 'branchpoints' || mode === 'propagation') {
     setInputValue('#f-layer', cfg.layer);
     setInputValue('#f-intervention', cfg.intervention_type);
     setInputValue('#f-magnitude', cfg.magnitude);
     setInputValue('#f-absolute-magnitude', cfg.absolute_magnitude);
-    setInputValue('#f-start', cfg.start);
-    setInputValue('#f-duration', cfg.duration);
+    if (mode === 'stress') {
+      setInputValue('#f-start', cfg.start);
+      setInputValue('#f-duration', cfg.duration);
+    }
   }
   if (mode === 'hysteresis') {
     setInputValue('#f-perturbation-mode', cfg.perturbation_mode);
@@ -1227,6 +1270,64 @@ function renderHysteresisDetailCharts(summary) {
     showlegend: true,
     legend: { orientation: 'h', x: 0, y: -0.2, font: { color: COLORS.textDim } },
     margin: { t: 10, r: 14, b: 60, l: 44 },
+  }, PLOTLY_CONFIG);
+}
+
+function renderPropagationDetailChart(summary) {
+  const metrics = summary.metrics || {};
+  const layerSummary = metrics.layer_summary || {};
+  const layers = Object.keys(layerSummary)
+    .map((value) => Number(value))
+    .sort((a, b) => a - b);
+  const labels = layers.map((layer) => `L${layer}`);
+  const relative = layers.map(
+    (layer) => layerSummary[String(layer)]?.delta_relative_clean?.mean ?? null,
+  );
+  const amplification = layers.map(
+    (layer) => layerSummary[String(layer)]?.amplification_vs_injection?.mean ?? null,
+  );
+  const terminal = metrics.terminal_summary?.final_norm || {};
+  if (summary.terminal_capture?.available) {
+    labels.push('final norm');
+    relative.push(terminal.delta_relative_clean?.mean ?? null);
+    amplification.push(terminal.amplification_vs_injection?.mean ?? null);
+  }
+
+  Plotly.react('detail-chart-propagation', [{
+    x: labels,
+    y: relative,
+    name: 'relative delta',
+    type: 'scatter',
+    mode: 'lines+markers',
+    line: { color: COLORS.signal, width: 2 },
+    marker: { size: 5 },
+    hovertemplate: '%{x}<br>relative=%{y:.5f}<extra></extra>',
+  }, {
+    x: labels,
+    y: amplification,
+    name: 'absolute amplification',
+    type: 'scatter',
+    mode: 'lines+markers',
+    line: { color: COLORS.warn, width: 2, dash: 'dot' },
+    marker: { size: 5 },
+    yaxis: 'y2',
+    hovertemplate: '%{x}<br>amp=%{y:.5f}<extra></extra>',
+  }], {
+    ...BASE_LAYOUT,
+    showlegend: true,
+    legend: { orientation: 'h', x: 0, y: -0.2, font: { color: COLORS.textDim } },
+    margin: { t: 10, r: 52, b: 60, l: 52 },
+    yaxis: {
+      ...BASE_LAYOUT.yaxis,
+      title: { text: 'relative delta', font: { size: 10 } },
+    },
+    yaxis2: {
+      title: { text: 'amplification', font: { size: 10 } },
+      overlaying: 'y',
+      side: 'right',
+      gridcolor: 'rgba(0,0,0,0)',
+      tickfont: { color: COLORS.warn },
+    },
   }, PLOTLY_CONFIG);
 }
 
@@ -1306,7 +1407,11 @@ function buildPayload() {
   const seedsRaw = $('#f-seeds').value.trim();
   if (seedsRaw) payload.seeds = seedsRaw;
 
-  if (state.mode === 'stress' || state.mode === 'branchpoints') {
+  if (
+    state.mode === 'stress'
+    || state.mode === 'branchpoints'
+    || state.mode === 'propagation'
+  ) {
     payload.layer = parseInt($('#f-layer').value, 10);
     payload.intervention_type = $('#f-intervention').value;
     payload.magnitude = parseFloat($('#f-magnitude').value);

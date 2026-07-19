@@ -32,6 +32,10 @@
   --sidebar-w: 244px;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -797,6 +801,8 @@ textarea {
 
 .run-mode[data-mode="observe"]    { color: var(--accent); background: var(--accent-dim); }
 .run-mode[data-mode="hysteresis"] { color: var(--signal); background: #c4b5fd20; }
+.run-mode[data-mode="branchpoints"] { color: var(--signal); background: #c4b5fd20; }
+.run-mode[data-mode="propagation"] { color: var(--warn); background: #fbbf7720; }
 .run-mode[data-mode="stress"]     { color: var(--warn); background: #fbbf7720; }
 .run-mode[data-mode="control"]    { color: var(--good); background: #86efac20; }
 .run-mode[data-mode="unknown"]    { color: var(--text-muted); background: var(--panel-hover); }

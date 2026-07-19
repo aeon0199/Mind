@@ -5,6 +5,7 @@ import pytest
 
 from scripts import observer_console, observer_daemon
 from runtime_lab.core.backend.loader import load_model_with_backend
+from tests.fakes import make_fake_backend
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,6 +81,82 @@ def test_daemon_and_console_expose_local_branchpoints():
     assert cfg.seed == 0
     assert "branchpoints" in command
     assert command[command.index("--magnitude") + 1] == "0.2"
+
+
+def test_daemon_and_console_expose_per_layer_propagation():
+    cfg = observer_daemon._build_config_propagation(
+        {
+            "prompt": "p",
+            "layer": "late",
+            "intervention_type": "scaling",
+            "magnitude": 0.5,
+            "seed": 0,
+        },
+        num_layers=6,
+    )
+    command = observer_console.build_cli_command(
+        {
+            "mode": "propagation",
+            "prompt": "p",
+            "layer": 4,
+            "intervention_type": "scaling",
+            "magnitude": 0.5,
+            "seed": 0,
+        }
+    )
+
+    assert cfg.intervention_layer == 5
+    assert cfg.intervention_type == "scaling"
+    assert cfg.intervention_magnitude == 0.5
+    assert cfg.seed == 0
+    assert "propagation" in command
+    assert command[command.index("--layer") + 1] == "4"
+    assert "--probe-layers" not in command
+    assert observer_console.infer_mode("propagation_run_abc") == "propagation"
+    assert "propagation" in observer_console._MODES_DOC
+
+
+def test_console_static_ui_exposes_propagation_mode():
+    html = (
+        ROOT / "scripts" / "observer_console" / "index.html"
+    ).read_text()
+    javascript = (
+        ROOT / "scripts" / "observer_console" / "app.js"
+    ).read_text()
+    stylesheet = (
+        ROOT / "scripts" / "observer_console" / "styles.css"
+    ).read_text()
+
+    assert 'data-mode="propagation"' in html
+    assert 'data-filter="propagation"' in html
+    assert html.count('data-only-for="stress"') == 2
+    assert "state.mode === 'propagation'" in javascript
+    assert "$$('[data-only-for]')" in javascript
+    assert "[hidden]" in stylesheet
+    assert "display: none !important" in stylesheet
+
+
+def test_daemon_dispatches_propagation_with_the_warm_backend(tmp_path):
+    result = observer_daemon._run_request(
+        {
+            "mode": "propagation",
+            "prompt": "p",
+            "layer": 0,
+            "magnitude": 0.2,
+            "max_tokens": 3,
+            "runs_dir": str(tmp_path),
+        },
+        make_fake_backend(),
+    )
+
+    assert result["ok"] is True
+    assert result["mode"] == "propagation"
+    assert result["summary"]["protocol_validity"][
+        "all_contexts_matched"
+    ] is True
+    assert result["summary"]["protocol_validity"][
+        "terminal_capture_complete"
+    ] is True
 
 
 def test_nnsight_remote_fails_before_loading_with_an_honest_boundary():

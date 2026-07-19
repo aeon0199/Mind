@@ -89,6 +89,10 @@
               <span class="mode-label">Branchpoints</span>
               <span class="mode-hint">Local one-step forks</span>
             </button>
+            <button type="button" class="mode-tab" data-mode="propagation">
+              <span class="mode-label">Propagation</span>
+              <span class="mode-hint">Downstream delta map</span>
+            </button>
             <button type="button" class="mode-tab" data-mode="stress">
               <span class="mode-label">Stress</span>
               <span class="mode-hint">Persistent A/B</span>
@@ -135,7 +139,7 @@
           </div>
 
           <!-- Stress-specific -->
-          <div class="mode-options" data-for="stress,branchpoints" hidden>
+          <div class="mode-options" data-for="stress,branchpoints,propagation" hidden>
             <div class="options-title">Intervention</div>
             <div class="field-grid">
               <label class="field">
@@ -159,11 +163,11 @@
                 <input type="checkbox" id="f-absolute-magnitude" />
                 <span>Absolute magnitude (legacy)</span>
               </label>
-              <label class="field">
+              <label class="field" data-only-for="stress">
                 <span class="field-label">Start token</span>
                 <input id="f-start" type="number" min="1" value="5" />
               </label>
-              <label class="field">
+              <label class="field" data-only-for="stress">
                 <span class="field-label">Duration</span>
                 <input id="f-duration" type="number" min="1" value="10" />
               </label>
@@ -356,6 +360,7 @@
               <button class="filter-chip is-active" data-filter="all">all</button>
               <button class="filter-chip" data-filter="observe">observe</button>
               <button class="filter-chip" data-filter="branchpoints">branchpoints</button>
+              <button class="filter-chip" data-filter="propagation">propagation</button>
               <button class="filter-chip" data-filter="hysteresis">hysteresis</button>
               <button class="filter-chip" data-filter="stress">stress</button>
               <button class="filter-chip" data-filter="control">control</button>
