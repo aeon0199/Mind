@@ -1,5 +1,25 @@
 # Observer Research Lab — Controller Arc (ARCHIVED 2026-04-19)
 
+> **FOUNDATION REBUILD CORRECTION — 2026-07-19.** This file preserves the
+> controller arc as it was understood in April; the following boundaries now
+> govern its interpretation:
+>
+> - Controller shadow/active runs are continued trajectories. After their first
+>   token difference, later rows have different contexts. Their token-difference
+>   labels therefore do not prove independent local branchpoint flippability.
+>   F30/F31 and Q1 are reopened for same-context one-step counterfactual testing.
+> - The old hysteresis experiment changed context and continued only the
+>   perturbed branch through a re-ask. It observed perturbation effects, but its
+>   recovery ratios and ELASTIC/PARTIAL/PLASTIC/RUNAWAY interpretations are
+>   provisional until rerun with matched clean and perturbed recovery branches.
+> - Direct facts such as intervention application counts, logit shifts, token
+>   changes, no-op scaling behavior, and observed output changes remain part of
+>   the historical record when supported by their artifacts.
+>
+> The active contract is
+> [docs/OBSERVER_FOUNDATIONS.md](docs/OBSERVER_FOUNDATIONS.md). Controller work
+> remains paused.
+
 > **Status: ARCHIVED.** This document records the closed-loop control research arc that ran from 2026-02 through 2026-04-19. That arc is complete — the naive-controller hypothesis is falsified on Qwen3-1.7B (see F28) and the interpretability phenomenon that emerged (F25 branchpoint hijacking) is model-specific in its consequences (F29).
 >
 > **For current active work, see [RESEARCH.md](RESEARCH.md) — the Mapping Program.** That document sets the research agenda going forward.
@@ -42,7 +62,11 @@ Last updated: **2026-04-19** · Final agent: Claude Opus 4.7 (1M context)
 
 - **Active focus**: **The naive-controller arc is done.** E8.7 phase 2 (with Codex's decoupled-layer code change) falsifies the last remaining hypothesis — acting 1 or 2 layers back with measure held fixed at -1 makes things WORSE than shadow, not better. Synthesis finding F28: the divergence signal measures token-level surprise (natural prose artifacts), not dynamical instability. Every tested controller variant either does nothing, over-actuates, or hijacks one branchpoint into a different basin — none produces closed-loop stabilization.
 - **Controller status**: **closed-loop stability control is not achievable with the current trigger signal on Qwen3-1.7B.** What we have demonstrated cleanly: (1) the instrumentation stack works end-to-end (F13: reproducible drift envelope at a calibrated operating point); (2) additive perturbation at final-layer can hijack a trajectory into a lower-divergence basin at certain branchpoints (F25: reproducible on seed 2 across all our tests); (3) the divergence signal and the concept of "instability" are not the same thing (F28). The project's legitimate story is now a negative result with clear follow-ups, not a stability controller.
-- **Capabilities snapshot**: observe, stress, hysteresis (prompt + noise modes), control (shadow + active, scaling + additive/random + additive/opposing with `ema` or `anchor` references), seed sweeps, multi-layer probing, logit-KL, semantic layer defaults, advisory generator, spectral trajectory probe, warm-model daemon (~16× speedup). Additive controller settings now serialize into config hashes and sweep metadata, including reference mode. All verified 2026-04-19.
+- **Historical capabilities snapshot (2026-04-19)**: observe, stress,
+  hysteresis (then prompt + noise modes), control, seed sweeps, multi-layer
+  probing, logit-KL, semantic layer defaults, advisory generator, spectral
+  trajectory probe, and warm-model daemon. The active July 2026 hysteresis mode
+  is noise-only matched exposure/recovery; see the correction above.
 - **Next recommended action**: **Pivot.** The naive-control path is exhausted. Three legitimate next directions, pick one:
   - **(a) Reframe as interpretability research.** F25's branchpoint-hijacking phenomenon is real and reproducible. Study when/why it works, map how small final-layer perturbations open/close token-level branchpoints. This is a *different* paper — about trajectory basin structure, not stability control. No more controller work needed; just deeper analysis of existing data + targeted observe runs.
   - **(b) Build a new trigger signal.** Divergence-as-instability failed. Alternatives worth testing as observation-only features: (i) entropy × divergence conjunction, (ii) divergence *acceleration* (second derivative), (iii) prompt-calibrated thresholds from E3-style baselines, (iv) drift direction consistency (cosine of consecutive drift vectors). Any of these correlating with *downstream output failure* (rather than just high raw_div) would be a new kind of finding.
@@ -83,8 +107,10 @@ _What we've established, with evidence. Don't re-run these unless you suspect on
   - Seeds 0, 1 unusable — TinyLlama-Chat hit `</s>` EOS immediately after the raw prompt (expects chat templating we didn't apply). Not a controller artifact; model-specific termination.
   - Seeds 2, 3, 4 generated output AND the controller actually fired (9-10 interventions each). Active output differs from shadow on all three — confirms token flips happened (Part A of F25 generalizes across Qwen3 and Llama families).
   - **But** on all three active seeds, avg_div went UP vs shadow (seed 2: +0.06 / seed 3: ~0 / seed 4: +0.10), and output quality DEGRADED — seed 2 dropped all spaces ("`Pleaseincludeingredients,measurements,bakingtime`"), seed 4 similarly concatenated. The "flip lands in LOWER-divergence basin" half of F25 does NOT generalize.
-  - Implication: **F25 was really two claims in a trench coat.** The mechanism ("additive at final layer flips tokens at close-margin branchpoints") is architecture-general. The consequence ("flip improves output") was Qwen3-specific basin luck on the sourdough prompt — the Qwen3 baseline on that prompt was an unusually degenerate numbered-list stub, and almost any perturbation-induced detour was an improvement. TinyLlama's sourdough baseline isn't degenerate the same way, so perturbations drop it into a worse basin.
-  - For the interpretability write-up: the paper can claim "additive perturbation at L-1 flips tokens at predictable branchpoint conditions (top-2 logit margin low, near uncertainty peaks)" as an architecture-general finding. It CANNOT claim "perturbation improves output" without a per-model study of basin structure.
+  - **July 2026 correction:** the runs establish continued additive
+    intervention effects in both model families, with different consequences.
+    Architecture-general local same-context flippability and predictable
+    branchpoint conditions are reopened for the independent one-step protocol.
   - Confidence: **medium** (n=1 replication model, one prompt, 3 usable seeds). A third-model check (Gemma-3-1B-it or SmolLM) would move this to high confidence.
 - **F28** — **(synthesis of F17-F27) Observer's divergence signal measures token-level surprise, not dynamical instability.** Cumulative evidence across 9 findings closes the naive-controller research arc:
   - The signal spikes on word-starts, numbered markers, punctuation transitions, new semantic units — events natural to coherent prose

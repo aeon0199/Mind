@@ -474,8 +474,8 @@
 
 <header class="paper-header">
   <div class="label-row">
-    <span class="label">Preprint · v2</span>
-    <span class="label-plain">v1 February 2026 · v2 April 2026</span>
+    <span class="label">Preprint · v2 + foundation correction</span>
+    <span class="label-plain">v1 February 2026 · v2 April 2026 · correction July 2026</span>
   </div>
   <h1><em>observer</em>: Runtime Instrumentation for<br>Trajectory Mapping in Language Models</h1>
   <p class="subtitle">
@@ -492,6 +492,31 @@
 
 <div class="callout callout-green" style="margin-bottom: 2.5rem;">
   <p>
+    <strong>Foundation rebuild status (2026-07-19).</strong> A code-and-claims
+    audit rebuilt Observer around <strong>Observe → Perturb → Compare →
+    Prove</strong>, with Act/controller work downstream and paused. The active
+    implementation now distinguishes consumed tokens from predicted next
+    tokens, records authoritative loaded-model provenance, creates independent
+    same-context one-step branchpoint forks, runs matched clean/perturbed
+    recovery branches, and validates diagnostics against simple baselines and
+    known synthetic trajectories.
+  </p>
+  <p>
+    This audit also reopens two v2 interpretations. First, the F31 AUROCs came
+    from continued controller shadow/active trajectories. After the first token
+    difference, later rows had different contexts, so their labels measured
+    shifted/cascading divergence rather than independent local flippability.
+    Second, the historical BASE → PERTURB → REASK protocol changed context and
+    continued only the perturbed branch; its perturbation effects remain
+    observations, but its recovery ratios and regime labels are provisional.
+    The historical numbers below are retained as an audit record, not erased.
+    The current contract is documented in
+    <code>docs/OBSERVER_FOUNDATIONS.md</code>.
+  </p>
+</div>
+
+<div class="callout callout-green" style="margin-bottom: 2.5rem;">
+  <p>
     <strong>v2 update (2026-04-19).</strong> The first version of this paper presented
     closed-loop stability control as the central contribution. Subsequent experiments
     falsified the original controller thesis on Qwen3-1.7B: scaling interventions at
@@ -503,23 +528,21 @@
     than dynamical instability in any control-theoretic sense.
   </p>
   <p>
-    What survives is the instrument. The deterministic branchpoint design, the
-    hysteresis protocol, the per-token telemetry, and the intervention engine all
-    work as designed. Building on that instrument, we report a new positive result:
-    a <strong>branchpoint hijacking</strong> phenomenon in which final-layer additive
-    perturbations can flip individual tokens at predictable trajectory positions, with
-    a within-model classifier achieving held-out AUROC of 0.82–0.86 on Qwen3-1.7B.
-    The mechanism generalizes architecturally; the consequences (whether the resulting
-    trajectory lands in a better or worse basin) are model-specific.
+    What survives is a repairable instrument and a set of observed perturbation
+    effects. The July foundation audit replaces the old branchpoint and
+    hysteresis interpretations with matched protocols. The historical
+    0.82–0.86 AUROCs are no longer presented as evidence that local flippability
+    is predictable; F31 and Q1 are reopened for calibration with independent
+    one-step counterfactuals.
   </p>
   <p>
     Sections rewritten in v2: §6 (spectral diagnostics, methodology corrected), §9
     (controller empirical evaluation, replaced with falsification arc), §10
     (experimental results, replaced with the Qwen3-1.7B controller arc), §11 (new —
     branchpoint hijacking), §12 (new — mapping program), §14 (limitations updated),
-    §15 (conclusion rewritten). Sections preserved largely as written: §3 architecture,
-    §4 SeedCache, §5 divergence signal mechanics, §7 hysteresis protocol, §8
-    intervention engine, §13 reproducibility infrastructure.
+    §15 (conclusion rewritten). The July 2026 correction subsequently rewrote
+    §3 architecture, §7 hysteresis, §11 F31, §12 status, §13 reproducibility,
+    §14 limitations, and §15 conclusion around the repaired foundation.
   </p>
 </div>
 
@@ -527,15 +550,14 @@
   <div class="abstract-label">Abstract</div>
   <p>
     We present <strong>observer</strong>, an open-source runtime stack for studying
-    perturbation dynamics in autoregressive language models. The system provides four
-    independently usable protocol layers: a three-stage hysteresis protocol for
-    measuring perturbation persistence, a single-pass observability runner with
-    streaming diagnostics, a deterministic intervention engine built around a
-    <em>SeedCache</em> branchpoint design that eliminates common confounds in
-    intervention experiments, and a closed-loop adaptive controller that applies
-    proportional damping in response to a per-token divergence signal. The divergence
-    signal is derived from a VAR(1) model fit on projected hidden states, providing a
-    held-out one-step prediction error.
+    perturbation dynamics in autoregressive language models. Its active foundation is
+    Observe → Perturb → Compare → Prove: canonical token-time telemetry,
+    independent local counterfactual forks, persistent propagation experiments,
+    matched recovery, and provenance-rich artifacts. The historical
+    <code>divergence</code> field is a compatibility alias for a descriptive
+    local VAR(1) prediction error. Simple hidden-velocity, hidden-acceleration,
+    logit-entropy, and top-1-margin baselines are emitted beside the advanced
+    probes.
   </p>
   <p>
     We use this instrument to falsify our own initial closed-loop stability control
@@ -543,16 +565,13 @@
     divergence signal correlates with token-level prose surprise (word-starts,
     structural boundaries, semantic transitions) rather than dynamical instability in
     a control-theoretic sense. Closed-loop control over this signal is not effective
-    on the tested model. We then report a positive finding that emerged from the same
-    apparatus: a <strong>branchpoint hijacking</strong> phenomenon in which
-    final-layer additive perturbations can flip individual tokens at predictable
-    positions, characterized by a within-model classifier achieving AUROC 0.82 on a
-    procedural prompt and 0.86 on a descriptive prompt (Qwen3-1.7B, held-out
-    pair-level evaluation). The classifier's predictive features differ between
-    prompt classes, suggesting prompt-class-dependent trajectory geometry. We
-    describe the architecture, the experimental protocols, the falsification arc, and
-    a mapping program organized around three open questions with explicit stop
-    conditions and controller-return criteria.
+    on the tested model. We then report an observed effect from the same
+    apparatus: additive interventions can produce token and trajectory changes.
+    However, a later audit found that the reported 0.82 and 0.86 AUROCs used
+    shifted/cascading labels from continued controller trajectories and therefore
+    do not establish predictable local branchpoints. We preserve that negative
+    methodology lesson, describe the repaired matched protocols, and reopen the
+    mapping questions with explicit stop conditions and controller-return criteria.
   </p>
 </div>
 
@@ -591,8 +610,8 @@
       <strong>Update (v2):</strong> we performed that validation. The divergence signal
       does not measure dynamical instability in the control-theoretic sense it was
       framed as measuring; it measures token-level prose surprise. See §10 for the
-      falsification arc and §11 for the positive finding (branchpoint hijacking)
-      that emerged from the same apparatus.
+      falsification arc and §11 for the observed perturbation effects and
+      reopened local-branchpoint question that emerged from the same apparatus.
     </p>
   </div>
 </section>
@@ -617,9 +636,11 @@
     hysteresis, or recovery.
   </p>
   <p>
-    <strong>nnsight</strong> provides a Pythonic interface for local and remote model execution, including 
-    access to frontier models via the NDIF infrastructure. Observer supports nnsight as an optional backend, 
-    inheriting its remote execution capabilities.
+    <strong>nnsight</strong> provides a Pythonic interface for local and remote
+    model execution, including NDIF infrastructure. Observer's current optional
+    nnsight adapter supports local execution only. Remote execution is
+    intentionally rejected until Observer has a trace-based backend that can
+    preserve its event and intervention contracts honestly.
   </p>
 
   <h3>Representation Engineering and Steering</h3>
@@ -673,47 +694,57 @@
 
   <h3>The Gap</h3>
   <p>
-    Observer's distinguishing contribution is the combination of three things none of the above provide together:
-    deterministic branchpointing (identical model state for both branches, eliminating confounds), recovery
-    measurement (quantifying whether the trajectory returns to baseline after intervention ends), and closed-loop
-    control (a token-level controller that detects instability and intervenes in real time). Existing tools execute
-    interventions. Observer measures what they do, whether the model recovers, and acts on that signal continuously.
+    Observer's active contribution is experimental discipline around runtime
+    intervention: canonical causal events, deterministic same-context local
+    forks, persistent propagation experiments, equal matched-recovery branches,
+    and provenance that makes matching claims checkable. Existing tools execute
+    interventions; Observer separates what changed immediately, what propagated,
+    what persisted, and what recovered. Closed-loop action remains a downstream,
+    paused research direction.
   </p>
 </section>
 
 <section>
   <h2><span class="sec-num">§3</span> Architecture Overview</h2>
   <p>
-    Observer is organized as four protocol layers, each independently usable and composable:
+    Observer's active architecture follows four evidence stages. Historical
+    versioned directories remain in the repository for reproduction, but they
+    are not the current protocol contract.
   </p>
 
   <div class="stack">
     <div class="stack-item">
-      <div class="stack-tag">V1</div>
+      <div class="stack-tag">01</div>
       <div class="stack-content">
-        <strong>baseline_hysteresis_v1 — Hysteresis Protocol</strong>
-        <p>Three-stage protocol (BASE → PERTURB → REASK) for measuring perturbation persistence. Does the model self-correct when re-asked, given that the perturbation remains in the KV cache?</p>
+        <strong>Observe — Canonical Runtime Events</strong>
+        <p>Record the consumed token, pre/post-intervention hidden state, logits,
+        predicted next token, simple baselines, and advanced token-time
+        diagnostics without assigning unsupported semantic meaning.</p>
       </div>
     </div>
     <div class="stack-item">
-      <div class="stack-tag">V1.5</div>
+      <div class="stack-tag">02</div>
       <div class="stack-content">
-        <strong>v1.5 — Observability Runner</strong>
-        <p>Single-pass token-level telemetry with streaming diagnostics: VAR(1) divergence predictor, spectral leakage metrics, layer stiffness, windowed SVD. No branching, no intervention.</p>
+        <strong>Perturb — Local or Persistent Counterfactuals</strong>
+        <p>Use independent one-step same-context forks for local sensitivity, or
+        continued matched branches for propagation. Do not mix those labels.</p>
       </div>
     </div>
     <div class="stack-item">
-      <div class="stack-tag">V2</div>
+      <div class="stack-tag">03</div>
       <div class="stack-content">
-        <strong>intervention_engine_v1.5_v2 — Deterministic Intervention Engine</strong>
-        <p>Baseline vs. intervention comparison via SeedCache branchpoint. Both branches start from identical model state. Supports additive, projection, scaling, and SAE-based interventions.</p>
+        <strong>Compare — Sensitivity, Propagation, Persistence, Recovery</strong>
+        <p>Measure hidden and logit distances, token flips, exposure endpoints,
+        and equal intervention-free matched recovery continuations.</p>
       </div>
     </div>
     <div class="stack-item">
-      <div class="stack-tag">S4</div>
+      <div class="stack-tag">04</div>
       <div class="stack-content">
-        <strong>adaptive_controller_system4 — Closed-Loop Controller</strong>
-        <p>Proportional controller with moving-average smoother and cooldown. Composite divergence score drives hidden-state scaling in real time. Shadow mode for calibration before active deployment.</p>
+        <strong>Prove — Provenance and Falsification</strong>
+        <p>Bind every result to loaded-model identity, exact config hash,
+        context fingerprints, protocol-validity fields, structured events,
+        zero controls, and tests. Act/controller work is downstream.</p>
       </div>
     </div>
   </div>
@@ -730,20 +761,20 @@
    │
    ├──────────────────────────┐
    ▼                          ▼
-<span class="d-accent">[ BASELINE branch ]</span>          <span class="d-warn">[ INTERVENTION branch ]</span>
-   SeedCache.clone()           SeedCache.clone()
-   greedy generation           hook active: intervene()
-   trajectory captured         trajectory captured
+<span class="d-accent">[ CLEAN one-step fork ]</span>      <span class="d-warn">[ PERTURBED one-step fork ]</span>
+   same consumed token         same consumed token
+   same sampling RNG           intervention active
    │                          │
    └──────────┬───────────────┘
               ▼
-   <span class="d-accent">[ TrajectoryComparison ]</span>
-      cosine distance per token
-      JS divergence on logits
-      regime classification
-      recovery metrics</pre>
+   <span class="d-accent">[ Local causal comparison ]</span>
+      hidden cosine / relative L2
+      KL / JS on logits
+      argmax and sampled-token flip
+      discard perturbed fork
+      advance clean trajectory only</pre>
   </div>
-  <div class="fig-caption">Figure 1. Intervention engine data flow. Both branches derive from identical prompt-pass state via SeedCache.clone().</div>
+  <div class="fig-caption">Figure 1. Local branchpoint data flow. Every row is an independent same-context one-step counterfactual.</div>
 </section>
 
 <section>
@@ -783,27 +814,31 @@ intervention_cache = seed_cache.clone()
 <span class="comment"># handles DynamicCache, legacy tuple-of-tuples, and generic objects</span></code><span class="code-label">cache.py</span></pre>
 
   <p>
-    The fingerprint — derived from the first-layer key cache statistics — provides a checksum that 
-    experiments can log to verify both branches genuinely share a common origin. This is the kind of 
+    The fingerprint hashes the first-layer key-cache shape, dtype, and a
+    deterministic value sample. Experiments use it with cache sequence length
+    to verify both forks share a common origin. This is the kind of
     rigor that most published intervention papers treat as an implementation detail but actually matters 
     for result validity.
   </p>
 
   <div class="callout">
     <p>
-      <strong>Why this matters:</strong> Without a shared branchpoint, "recovery" measurements conflate 
-      genuine behavioral change with noise introduced by divergent initial conditions. 
-      The SeedCache makes the comparison meaningful.
+      <strong>Why this matters:</strong> Without a shared branchpoint, local
+      sensitivity measurements conflate intervention effects with different
+      initial state. Recovery additionally requires two aligned continuations,
+      as specified in §7.
     </p>
   </div>
 </section>
 
 <section>
-  <h2><span class="sec-num">§5</span> The Divergence Signal</h2>
+  <h2><span class="sec-num">§5</span> The Local Prediction-Error Signal</h2>
   <p>
-    The core signal feeding both the observability runner and the adaptive controller is a 
-    <strong>per-token held-out prediction error</strong> from a VAR(1) model fit on 
-    a sliding window of projected hidden states.
+    The signal historically called <code>divergence</code> is a
+    <strong>per-token held-out local prediction error</strong> from a VAR(1)
+    model fit on a sliding window of projected hidden states. Canonical
+    diagnostics now expose <code>local_prediction_error</code> and retain
+    <code>divergence</code> as a compatibility alias.
   </p>
 
   <h3>Projection</h3>
@@ -970,69 +1005,76 @@ intervention_cache = seed_cache.clone()
 <section>
   <h2><span class="sec-num">§7</span> The Hysteresis Protocol</h2>
   <p>
-    The baseline hysteresis module implements a three-stage experimental protocol for 
-    measuring how much of a perturbation's effect persists after the perturbation is removed.
+    The active protocol is <code>matched-exposure-recovery-v2</code>. Clean and
+    perturbed trajectories begin from clones of the same SeedCache, advance in
+    lockstep with paired sampling randomness, and receive identical phase
+    instructions.
   </p>
 
   <div class="diagram">
 <pre style="background:none;border:none;padding:0;margin:0;font-size:0.75rem;">
-Stage 1: <span class="d-accent">BASE</span>
+Phase 1: <span class="d-accent">MATCHED EXPOSURE</span>
   ─────────────────────────────────────────────────────
-  Prompt → SeedCache → greedy generation
-  Capture: hidden_norm, entropy, logit_norm, SVD spectrum
-  
-Stage 2: <span class="d-warn">PERTURB</span>
+  SeedCache.clone() → CLEAN branch (intervention always off)
+  SeedCache.clone() → PERTURBED branch (noise active only in window)
+  Same requested decisions, same sampling RNG
+
+Phase 2: <span class="d-warn">MATCHED RECOVERY</span>
   ─────────────────────────────────────────────────────
-  Same SeedCache + Delta instruction injected
-  Capture same statistics
-  KV cache retained for Stage 3
-  
-Stage 3: <span class="d-dim">REASK</span>
-  ─────────────────────────────────────────────────────
-  Continue from PERTURB's KV cache
-  Minimal re-ask (no repeated prompt)
-  Perturbation still in context; does model return to BASE?
+  Continue BOTH exposure endpoints
+  No new instruction on either branch
+  Intervention disabled on both branches
+  Same requested recovery length, same sampling RNG
 
 Metrics:
-  D = composite distance(BASE, PERTURB)      <span class="d-dim">← drift</span>
-  H = composite distance(BASE, REASK)        <span class="d-dim">← hysteresis</span>
-  R = 1 - H / (D + ε)                       <span class="d-dim">← recovery ∈ (-∞, 1]</span></pre>
+  direct effect = peak paired distance while intervention is active
+  propagated distance = paired distance after the active window
+  residual distance = final paired recovery distance
+  recovery = 1 - residual / propagated</pre>
   </div>
 
   <p>
-    The composite distance used in the metric computation draws on four component signals: 
-    relative hidden norm difference, entropy distance, relative logit norm difference, 
-    and SVD spectral distance (normalized L2 between top singular value vectors). 
-    These are combined with equal weights except logit norm (0.5×), 
-    reflecting that hidden state geometry carries more signal than logit magnitude.
+    Each aligned decision records hidden cosine distance, relative hidden L2,
+    logit Jensen–Shannon and KL divergence, argmax flip, and paired sampled-token
+    flip. The primary paired distance is the maximum of hidden cosine, relative
+    hidden L2, and JS for that step.
   </p>
 
-  <p>Recovery R is classified into four regimes:</p>
+  <p>
+    A recovery value and regime are emitted only if the exposure includes a
+    post-intervention decision, its endpoint exceeds the configured propagation
+    floor, and both recovery traces have their full matched length. Otherwise
+    the run is explicitly <code>invalid</code> or
+    <code>no-propagation</code>.
+  </p>
+
+  <p>Valid recovery values use the following descriptive regimes:</p>
 
   <div class="regime-grid">
     <div class="regime-card">
       <div class="rc-label rc-elastic">ELASTIC</div>
-      <p>R &gt; 0.8. Model substantially returns to baseline behavior despite perturbation remaining in context.</p>
+      <p>R &gt; 0.8. Most propagated separation decays during matched recovery.</p>
     </div>
     <div class="regime-card">
       <div class="rc-label rc-partial">PARTIAL</div>
-      <p>0.4 &lt; R ≤ 0.8. Partial recovery; residual perturbation effect visible in trajectory statistics.</p>
+      <p>0.4 &lt; R ≤ 0.8. Some propagated separation remains.</p>
     </div>
     <div class="regime-card">
       <div class="rc-label rc-plastic">PLASTIC</div>
-      <p>0 ≤ R ≤ 0.4. Perturbation effect persists significantly. Model has been durably steered.</p>
+      <p>0 ≤ R ≤ 0.4. Most propagated separation persists over this window.</p>
     </div>
     <div class="regime-card">
       <div class="rc-label rc-divergent">DIVERGENT</div>
-      <p>R &lt; 0. REASK is further from BASE than PERTURB was. Perturbation has amplified rather than decayed.</p>
+      <p>R &lt; 0. Paired separation grows during the matched recovery window.</p>
     </div>
   </div>
 
   <p>
-    This taxonomy provides vocabulary for characterizing perturbation experiments that the 
-    field currently lacks. Whether a given prompt-perturbation pair produces elastic, plastic, 
-    or divergent behavior is a property of the model that is currently unknown for most 
-    practically relevant perturbation types.
+    These labels describe a measured window; they are not material properties of
+    a model. The historical three-stage re-ask results remain visible elsewhere
+    in this paper, but their recovery/regime interpretation is provisional
+    because that protocol changed context and lacked a matched clean recovery
+    branch.
   </p>
 </section>
 
@@ -1376,17 +1418,16 @@ Metrics:
 </section>
 
 <section>
-  <h2><span class="sec-num">§11</span> Branchpoint Hijacking: A Positive Finding</h2>
+  <h2><span class="sec-num">§11</span> Perturbation Effects and the Reopened Branchpoint Question</h2>
 
   <p>
-    The controller arc was a falsified hypothesis. The same apparatus produced an
-    unfalsified mechanism worth reporting. We call it <em>branchpoint hijacking</em>:
-    additive perturbations applied to the final transformer layer can flip individual
-    tokens at predictable positions in the generation sequence. The mechanism reaches
-    the LM head (unlike scaling, which is absorbed by RMSNorm), it is reproducible
-    across seeds, and it generalizes architecturally. Whether a flip improves or
-    degrades the resulting output is model- and prompt-specific — that is the
-    consequence-side limit, not a flaw in the mechanism.
+    The controller arc was a falsified hypothesis. Its runs still contain a
+    narrower observation worth preserving: additive interventions can change
+    generated tokens and redirect continued trajectories, whereas final-layer
+    scaling can be absorbed by RMSNorm. We historically called this
+    <em>branchpoint hijacking</em>. The July audit separates that observed
+    trajectory effect from the stronger, reopened claim that local
+    same-context flippability is predictable.
   </p>
 
   <h3>F25 — The mechanism, observed</h3>
@@ -1414,35 +1455,32 @@ Metrics:
     mechanism landed the trajectory in a coherent recipe basin.
   </p>
   <p>
-    The conclusion: the perturbation-induced branchpoint flip is architecture-general;
-    whether the new basin is better or worse is a property of the model's basin
-    structure for that prompt, not a property of the perturbation. F25 was effectively
-    two claims in one. The mechanism replicates; the consequence does not.
+    The corrected conclusion is narrower: continued additive interventions
+    changed outputs in both tested model families, and the consequence differed.
+    A calibrated independent local-fork suite is still required before calling
+    the local mechanism architecture-general.
   </p>
 
-  <h3>F31 — Branchpoint flippability is predictable from the clean trajectory</h3>
+  <h3>F31 — REOPENED: historical AUROCs used cascading labels</h3>
   <p>
-    A natural follow-up question: given a step in clean (unperturbed) generation, can
-    we predict whether a small perturbation at that step would flip the next token?
-    We address this offline using existing control-mode runs. For each pair of
-    matched shadow/active runs that share (model, prompt, seed, max_tokens,
-    temperature, measure_layer, act_layer) and where the active run actually fires
-    the controller, we construct per-step training rows: features extracted from the
-    <em>shadow</em> trajectory at step <em>t</em>, label 1 if the active and shadow
-    tokens at step <em>t</em> differ.
+    The intended question remains important: given a clean decision context, can
+    we predict whether a small intervention at that exact context flips the next
+    token? The historical analysis attempted to answer it using paired
+    controller shadow/active runs and labeled a row positive whenever the two
+    continued trajectories emitted different tokens at the same ordinal step.
   </p>
   <p>
-    Critical methodology note: features must come from the shadow trajectory. An
-    earlier analyzer pulled features from the active trajectory and reported
-    AUROC = 0.80, but the active trajectory contains intervention-downstream fields
-    (<code>intervention_applied</code>, <code>scale_used</code>,
-    <code>controller_drift_norm</code>) that are tautologically correlated with the
-    flip label — non-zero only on steps where the controller fired. The 0.80 was a
-    data leak, not a predictor.
+    Two methodology defects matter. An early version used
+    intervention-downstream active features, a direct label leak. Switching to
+    shadow features fixed that leak but not the label: once the active run emits
+    a different token, every later active forward is conditioned on a different
+    context. Later token differences are cascading consequences of an earlier
+    flip, not independent answers to the same-context local counterfactual.
   </p>
   <p>
-    With shadow-trajectory features only, on Qwen3-1.7B with pair-level
-    train/test split (80/20) and matched configurations:
+    The historical shadow-feature analysis produced the following numbers. They
+    are preserved for provenance and as an audit lesson, not accepted as local
+    flippability performance:
   </p>
 
   <div class="table-wrap">
@@ -1456,8 +1494,9 @@ Metrics:
   </div>
 
   <p>
-    Both prompts independently clear an AUROC threshold of 0.80 within Qwen3-1.7B.
-    The features that drive the prediction differ between prompt classes:
+    Both historical slices exceeded 0.80, but those thresholds cannot close Q1
+    because the target variable did not match Q1's causal event. The reported
+    feature associations were:
   </p>
 
   <div class="table-wrap">
@@ -1474,24 +1513,22 @@ Metrics:
   </div>
 
   <p>
-    The sign flip on <code>spectral.permutation_change</code> between procedural and
-    descriptive generation is the most interesting line item. It suggests Qwen3-1.7B
-    drives different trajectory geometries for different prompt classes, and the
-    geometric signature of a "branchpoint" depends on which class. The only feature
-    with a consistent sign across both prompts is <code>step_idx</code> — generation
-    position — which is the universal-but-weak predictor.
+    These associations are hypotheses only. In particular,
+    <code>step_idx</code> may predict the increasing chance that two already
+    divergent trajectories remain different, rather than local causal
+    vulnerability. Prompt-class sign differences likewise require replication
+    with independent local forks.
   </p>
 
   <div class="callout callout-green">
     <p>
-      <strong>The positive finding, stated plainly.</strong> Within Qwen3-1.7B, given a
-      step of clean generation, we can predict at AUROC ≥ 0.80 whether a small additive
-      perturbation at that step would flip the next token. The features driving the
-      prediction are geometric properties of the unperturbed trajectory at that step,
-      and those features are prompt-class-dependent. The mechanism by which the flip
-      occurs (additive perturbation reaching the LM head's argmax margin) generalizes
-      to a Llama-family model; whether the resulting trajectory is better or worse
-      does not.
+      <strong>Corrected status.</strong> F31 and Q1 are reopened. The active
+      <code>branchpoints</code> runner now creates an independent clean and
+      perturbed one-step fork at every verified shared context, pairs sampling
+      randomness, discards the perturbed fork, and advances only clean
+      generation. The replacement analyzer accepts only those artifacts, splits
+      by whole run, fits preprocessing on training runs only, and reports
+      precision/recall beside AUROC. Target-model calibration remains to be run.
     </p>
   </div>
 </section>
@@ -1516,8 +1553,8 @@ Metrics:
         <tr>
           <td><strong>Q1</strong></td>
           <td>Branchpoint geometry: when are tokens flippable?</td>
-          <td>Within-Qwen3 held-out AUROC ≥ 0.80 across ≥2 prompts.</td>
-          <td><strong>Closed (F31)</strong></td>
+          <td>Independent same-context forks; precision ≥0.7 and recall ≥0.5, or whole-run held-out AUROC ≥0.80, across ≥2 prompts.</td>
+          <td><strong>Reopened (F31 correction)</strong></td>
         </tr>
         <tr>
           <td><strong>Q2</strong></td>
@@ -1552,7 +1589,8 @@ Metrics:
   <p>
     If two of these land, a controller redesign experiment using the new trigger,
     layer, and gate becomes worth running. If none land within the mapping program,
-    the mechanistic findings (F25, F29, F31, plus Q2 and Q3 results) stand on their
+    the observed perturbation findings (F25/F29) plus any newly validated Q1–Q3
+    results stand on their
     own as an interpretability contribution and the controller stays paused.
   </p>
 
@@ -1575,11 +1613,12 @@ Metrics:
     The compute environment for the reported experiments is a single NVIDIA H200 GPU via RunPod.
   </p>
   <p>
-    Every run produces a <strong>config hash</strong> (SHA-256 of the full experiment configuration, 
-    sorted-key JSON) and a <strong>seed cache fingerprint</strong> (statistics of the first-layer 
-    key cache). These allow reconstruction of run identity and verification that two runs claiming 
-    to share a branchpoint actually do. The full experiment configuration, trajectory data, 
-    and computed metrics are written to structured JSON artifacts for every run.
+    Every run produces a <strong>config hash</strong> (SHA-256 of the exact
+    final sorted-key configuration) and authoritative loaded-model identity.
+    Protocols that claim matched contexts also record cache fingerprints and
+    sequence lengths. The full configuration, trajectory data,
+    protocol-validity fields, and computed metrics are written to structured
+    artifacts.
   </p>
   <p>
     The included <code>REPRODUCIBILITY.md</code> specifies a reporting checklist for public claims: 
@@ -1589,13 +1628,11 @@ Metrics:
     absent from published intervention work.
   </p>
   <p>
-    The CI workflow runs a <code>compileall</code> pass over the active runtime
-    package and the orchestrator scripts on every push, plus a <code>unittest
-    discover</code> pass that exercises a small suite of guard tests. The guard tests
-    catch the kind of integration regression a previous Codex audit caught manually:
-    CLI semantic-layer parsing, branchpoint-analyzer default values, README quickstart
-    pointing at the unified runtime entry points rather than the legacy v1/v1.5/v2
-    scripts. The repository keeps two top-level research documents:
+    CI installs the package in editable mode, runs the pytest contract suite,
+    compiles the active package/scripts, and lints with Ruff. The tests cover
+    installation, event semantics, provenance, semantic layer resolution,
+    same-context local forks, matched recovery, run-grouped analysis, and
+    synthetic diagnostic validation. The repository keeps two top-level research documents:
     <code>RESEARCH.md</code> tracks the active mapping program and is the entry point
     for any new session, and <code>RESEARCH_CONTROLLER.md</code> archives the
     completed controller arc with full F-numbered findings so subsequent agents can
@@ -1612,37 +1649,32 @@ Metrics:
     stability needs it to measure).
   </p>
   <p>
-    <strong>Single-model scope.</strong> The mapping program in §12 is explicitly scoped
-    to Qwen3-1.7B. F25 Part A (the flip mechanism) replicates on TinyLlama-1.1B (F29);
-    F25 Part B (the basin direction) does not. F31's branchpoint predictor is within-
-    Qwen3 only. Cross-model generalization is a deferred research question, not a
-    settled one. Anyone applying these results to a different architecture should
-    expect F31's specific predictive features (e.g., the sign of
-    <code>spectral.permutation_change</code>) to need recalibration per model.
+    <strong>Target-model calibration pending.</strong> The mapping program is
+    scoped first to Qwen3-1.7B. Continued additive interventions changed outputs
+    on Qwen3 and TinyLlama, with different consequences, but the repaired local
+    branchpoint protocol has not yet been calibrated on either research model.
+    Cross-model generalization is open.
   </p>
   <p>
-    <strong>Prompt-class diversity.</strong> F31 closes Q1 on Qwen3 with two prompts
-    — one procedural ("Write step-by-step instructions for baking sourdough bread.")
-    and one descriptive ("Describe the water cycle in a few sentences.") — and finds
-    that predictive features differ between them. Three-or-more prompt classes
-    (reasoning, code, creative) would harden the prompt-class-dependent geometry
-    claim and is an immediate Q1-extension experiment.
+    <strong>Prompt-class diversity.</strong> The historical F31 analysis used one
+    procedural and one descriptive prompt, but its labels were cascading. Both
+    slices must be rerun with independent same-context forks before any
+    prompt-class geometry claim is restored.
   </p>
   <p>
     <strong>Sampling.</strong> v1 noted that all generation used greedy argmax. v2
     added temperature/top-p/top-k sampling support, but a subtle finding emerged: with
-    matched seeds, <code>torch.multinomial</code> can produce the same drawn token
-    from slightly different conditional distributions, so logit-shift effects are
-    masked at the token level even when present. Future work should use unmatched
-    branch seeds when measuring perturbation effects on sampling-mode generation.
+    matched randomness, <code>torch.multinomial</code> can produce the same drawn
+    token from slightly different conditional distributions. The repaired
+    protocols preserve paired randomness to isolate the intervention and report
+    KL/JS plus argmax flips so distribution shifts remain visible even when the
+    sampled token is unchanged.
   </p>
   <p>
-    <strong>Controller-mode logit features not logged.</strong> A natural extension of
-    the F31 branchpoint predictor would include top-2 logit margin and per-step logit
-    entropy as features. Both are architecture-invariant and should be the most
-    direct mechanistic predictors of flippability. Neither is currently written into
-    <code>events.jsonl</code>; adding them is queued as a small code task and would
-    enable a more principled cross-model F31 follow-up.
+    <strong>Branchpoint calibration not yet run.</strong> Repaired local
+    branchpoint artifacts include clean top-1 margin, logit entropy, hidden
+    velocity/acceleration, local prediction error, spectral, and SVD features.
+    Whether any predicts local flips out of sample remains empirical.
   </p>
   <p>
     <strong>Asserted controller weights.</strong> The 70/15/10/5 weighting in the v1
@@ -1716,25 +1748,22 @@ Metrics:
 
   <p>
     <strong>v1 Experiment C (signal baseline comparison).</strong> Status:
-    <em>partially superseded.</em> The intended test was "does VAR(1) divergence
-    outperform simpler signals." The v2 work did not run that comparison head-to-head,
-    but F31's univariate-feature AUROCs offer a partial answer: the strongest single
-    feature for branchpoint flippability is <code>spectral.permutation_change</code>
-    (a time-axis spectral statistic, AUROC 0.74 alone) or <code>step_idx</code>
-    (literally token position, AUROC 0.80 alone on water-cycle). Neither is the
-    VAR(1) divergence signal. This is a gentle hint that simpler signals may carry
-    much of what divergence carries, and a head-to-head benchmark is worth doing.
-    Queued as a follow-up.
+    <em>mechanics implemented; semantic comparison pending.</em> Observer now
+    emits hidden velocity, hidden acceleration, logit entropy, and top-1 margin
+    beside local VAR(1) prediction error, temporal spectral, and windowed-SVD
+    signals. A deterministic validator checks the actual probes on constant,
+    linear-drift, oscillatory, and shock trajectories. The historical F31
+    AUROCs cannot answer which signal predicts local flippability because their
+    labels were cascading; that head-to-head comparison belongs in the repaired
+    calibration suite.
   </p>
 
   <p>
-    <strong>New v2 work queued.</strong> Q2 (perturbation propagation) and Q3 (basin
-    structure) — both defined in §12 with stop conditions — are the next planned
-    experiments. Q2 is ~1 hour of offline analysis on existing stress runs; Q3
-    requires a small new experiment matrix (5 prompt classes × 3 seeds × 2 cells =
-    30 control runs, ~5 minutes with the warm-model daemon). Closing both within the
-    mapping program would either trigger the controller-return criteria in §12 or
-    establish a clean negative result on closed-loop stability for this model class.
+    <strong>Foundation-first work queued.</strong> The next experiment is a small
+    Qwen3 calibration suite: independent local branchpoints and matched
+    hysteresis over at least three seeds, two prompts, and zero/nonzero
+    magnitudes. Q2 and Q3 follow only after those protocols produce valid
+    target-model evidence. No controller rows will be used as local labels.
   </p>
 </section>
 
@@ -1763,14 +1792,14 @@ Metrics:
   </p>
 
   <p>
-    What remains is a useful instrument and one positive mechanistic finding. The
-    instrument — SeedCache branchpointing, the unified runtime, the warm daemon, the
-    decoupled measure/act layer hooks, the corrected token-time spectral probe — is
-    sound and reusable. The positive finding — branchpoint hijacking on Qwen3-1.7B
-    with a within-model AUROC predictor that clears 0.80 on two prompt classes — is
-    a concrete interpretability result that the field could build on. The mapping
-    program in §12 organizes what comes next, with explicit stop conditions and
-    explicit criteria for reopening the controller question if the data warrants it.
+    What remains is a repaired instrument, observed perturbation effects, and a
+    sharper open question. The active runtime now supports canonical events,
+    authoritative provenance, independent local branchpoint forks, matched
+    exposure/recovery traces, direct diagnostic baselines, and deterministic
+    validation. The historical AUROC predictor is not retained as a positive
+    finding because its target labels were cascading. The mapping program in
+    §12 organizes the calibration needed to determine whether a genuine local
+    predictor exists, with explicit criteria for reopening controller work.
   </p>
 
   <p>
@@ -1793,7 +1822,8 @@ Metrics:
     implemented against artifacts that were jointly reviewed before being treated
     as evidence. All code, runs, and claims were human-reviewed against generated
     artifacts. The complete F-numbered evidence chain (F1–F31) is preserved in
-    <code>RESEARCH_CONTROLLER.md</code> and <code>RESEARCH.md</code> in the
+    <code>RESEARCH_CONTROLLER.md</code>, <code>RESEARCH.md</code>, and
+    <code>docs/OBSERVER_FOUNDATIONS.md</code> in the
     repository, with full per-experiment run identifiers so any claim in this paper
     can be traced to its underlying run artifacts.
   </p>

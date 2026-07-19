@@ -1,10 +1,17 @@
 # observer
 
-Runtime research lab for language-model trajectory mapping, perturbation testing, and control experiments.
+Runtime research lab for language-model trajectory mapping and causal
+perturbation experiments.
 
 Most interpretability tools show you what's inside a model. Observer is built around a different question: **can you measure how generation trajectories move, branch, persist, and respond to perturbation at token time?**
 
-This is not another activation visualization toolkit. It's a runtime instrument for observability, deterministic intervention comparisons, and controller research.
+The foundation is **Observe → Perturb → Compare → Prove**. Observer records the
+actual token-decision timeline, creates matched counterfactuals, measures what
+changes, and saves enough provenance to challenge every result. `Act`—including
+controller research—comes later.
+
+See [`docs/OBSERVER_FOUNDATIONS.md`](docs/OBSERVER_FOUNDATIONS.md) for the
+scientific and runtime contract.
 
 ## Read The Paper First
 
@@ -28,11 +35,17 @@ This project was built by an independent researcher without formal ML or softwar
 
 ## Current Status
 
-Observer is in **Phase 2: mapping**. The original closed-loop controller thesis is paused after the controller arc showed that the first trigger was not measuring what we thought it was. The active program now maps branchpoint geometry, perturbation propagation, and basin behavior in Qwen3-1.7B.
+Observer is in a **foundation-first rebuild and calibration phase**. The runtime,
+provenance, local branchpoint, matched-recovery, and diagnostic-baseline
+contracts have been repaired. The historical closed-loop thesis remains paused.
+The next scientific work is a small multi-seed, multi-prompt calibration suite
+using the repaired protocols.
 
 Start with:
 
-- `RESEARCH.md` for the active mapping program and next experiment.
+- `docs/OBSERVER_FOUNDATIONS.md` for what Observer is and what each result can
+  prove.
+- `RESEARCH.md` for the active evidence ledger and next experiment.
 - `RESEARCH_CONTROLLER.md` for the archived controller evidence.
 - `docs/RESEARCH_WORKFLOW.md` for the experiment handoff discipline.
 
@@ -40,32 +53,59 @@ Start with:
 
 ## What This Does
 
-Observer instruments autoregressive generation at the token level, records hidden-trajectory diagnostics, runs deterministic baseline-vs-intervention comparisons, and can still run closed-loop controller experiments when the research question calls for it.
+Observer instruments autoregressive generation at the token level, records
+hidden-trajectory diagnostics, and runs matched causal comparisons.
 
-Four protocol layers, each independently usable:
+Its foundation has four stages:
 
-- **Hysteresis protocol** — `BASE → PERTURB → REASK`: does perturbation memory persist after the perturbation is removed? Answers the question that jailbreak and context-drift research rarely asks directly.
-- **Observability runner** — single-pass token-level telemetry: divergence, spectral diagnostics, layer stiffness, windowed SVD. No branching, no intervention. Just signal.
-- **Intervention engine** — deterministic baseline-vs-intervention comparison via `SeedCache`: both branches run from an identical prompt-pass snapshot. Eliminates RNG and attention-mask confounds that most published intervention papers don't control for.
-- **Adaptive controller** — closed-loop research mode. Shadow mode and active interventions are available, but the original controller design is archived rather than treated as validated.
+- **Observe** — emit canonical events that distinguish the consumed token from
+  the predicted next token. Record simple baselines (`hidden_velocity`,
+  `hidden_acceleration`, `logit_entropy`, `top1_margin`) beside VAR, token-time
+  spectral, layer, and windowed-SVD diagnostics.
+- **Perturb** — either run a persistent clean-vs-intervention stress comparison
+  or create an independent **local branchpoint** fork at each clean decision.
+  Local forks share the exact cache, consumed token, and sampling RNG.
+- **Compare** — measure direct sensitivity, propagation, persistence, and
+  matched recovery. Recovery continues both exposed branches under identical
+  conditions with the intervention disabled.
+- **Prove** — save the final config hash, loaded-model identity, context
+  fingerprints, structured events, protocol-validity fields, and testable
+  artifacts.
+
+**Act is downstream.** The adaptive controller remains runnable for archived
+research and future experiments, but it is not treated as a validated layer of
+Observer's foundation.
 
 ---
 
-## The Divergence Signal
+## The Local Prediction-Error Signal
 
-The core signal is not a distance metric. It's a **held-out one-step prediction error** from a VAR(1) model fit on a sliding window of projected hidden states.
+The historical field name `divergence` is a compatibility alias. The descriptive
+name is `local_prediction_error`: a held-out one-step prediction error from a
+VAR(1) model fit on a sliding window of projected hidden states.
 
-At each token: project hidden state to 64 dimensions via a deterministic Rademacher matrix, fit VAR(1) dynamics on the recent window (excluding the newest state), predict the newest state from the previous one, measure how wrong that prediction is. When generation is stable, the hidden trajectory is locally predictable. When it isn't, this signal spikes before the output reflects it.
+At each token, Observer projects the hidden state through a deterministic
+Rademacher matrix, fits local dynamics on the recent window excluding the
+newest state, predicts that newest state, and measures the prediction error.
+It says how locally predictable that projected trajectory was. It does not by
+itself say the text is wrong, unsafe, or dynamically unstable.
 
-The composite score driving the controller: 70% prediction error, 15% spectral entropy, 10% high-frequency activation fraction, 5% SVD rank delta.
+The historical controller combines this value with spectral and SVD signals.
+That policy is archived evidence, not a foundation claim.
 
 ---
 
-## SeedCache: Deterministic Branchpointing
+## SeedCache and Local Counterfactuals
 
-The intervention engine runs the prompt exactly once, snapshots `past_key_values` + final-token logits + hidden state at the target layer, then `.clone()`s that state for both the baseline and intervention branches. Both branches forward from identical model state.
+The intervention engine runs the prompt exactly once and snapshots
+`past_key_values`, final-token logits, and the selected hidden state. The local
+branchpoint protocol clones that state at every clean decision, proves the
+contexts match, performs paired one-step clean and perturbed forwards, discards
+the perturbed fork, and advances only the clean path.
 
-This is the thing that makes intervention comparisons actually mean something. Without it, you're measuring noise.
+That distinction matters: after an earlier token flip, two continued
+trajectories no longer share a context. Their later differences measure
+propagation, not new local flips.
 
 ---
 
@@ -89,15 +129,25 @@ python -m runtime_lab.cli.main stress \
   --max-tokens 64 \
   --layer -1 \
   --type additive \
-  --magnitude 2.0 \
+  --magnitude 0.15 \
   --start 5 \
   --duration 10
 
-# 3) Closed-loop adaptive control (shadow mode)
-python -m runtime_lab.cli.main control \
+# 3) Independent one-step local branchpoint map
+python -m runtime_lab.cli.main branchpoints \
   --prompt "Explain how airplanes fly." \
+  --max-tokens 64 \
+  --layer mid \
   --type additive \
-  --shadow
+  --magnitude 0.15
+
+# 4) Matched exposure and intervention-free recovery
+python -m runtime_lab.cli.main hysteresis \
+  --prompt "Explain how airplanes fly." \
+  --max-tokens 64 \
+  --noise-layer mid \
+  --noise-magnitude 0.15 \
+  --recovery-tokens 32
 ```
 
 ---
@@ -145,24 +195,30 @@ remote result can be represented honestly.
 
 Every run produces structured, reusable output — not just text.
 
-**Intervention engine runs:**
+**Stress runs:**
 - Deterministic config hash + seed cache fingerprint
 - Baseline and intervention hidden trajectories
-- Recovery metrics and regime classification (`ELASTIC / PARTIAL / PLASTIC / DIVERGENT`)
+- Token agreement, hidden distance, logit KL/JS, and post-window propagation
+
+**Local branchpoint runs:**
+- One independent clean/perturbed fork per shared decision context
+- Context fingerprints, paired RNG status, local argmax/sample flips
+- Clean pre-intervention diagnostics for downstream analysis
 
 **Observability runs:**
-- Token-by-token telemetry: divergence, spectral metrics, layer stiffness, SVD signature
-- Plot artifacts: timeline vitals, SVD over tokens, entropy vs divergence phase space, headline scorecard
+- Token-by-token telemetry: simple baselines, local prediction error, spectral
+  metrics, layer stiffness, and SVD signature
+- Diagnostics health and deterministic synthetic validation
 
-**Adaptive controller runs:**
-- Per-token `events.jsonl` with diagnostics and control decisions
-- `summary.json` with regime counts and aggregate control stats
-- Optional `dashboard.html`
+**Matched hysteresis runs:**
+- Four primary traces: clean/perturbed exposure and clean/perturbed recovery
+- Aligned distance curves and explicit protocol-validity metadata
+- Recovery classification only after proven propagation and valid matched
+  recovery
 
-**Hysteresis runs:**
-- Staged frames (`base`, `perturb`, `reask`)
-- Hysteresis and recovery summary metrics
-- Distribution-shift (JS divergence) comparisons across context stages
+**Archived controller runs:**
+- Per-token diagnostics and control decisions for reproducing the historical arc
+- Not accepted as local branchpoint labels by the active analyzer
 
 ---
 
@@ -170,22 +226,29 @@ Every run produces structured, reusable output — not just text.
 
 `additive` · `projection` · `scaling` · `sae`
 
-All run from deterministic SeedCache branchpoints. Results are directly comparable across intervention families.
+All perturbation protocols begin with provenance-tracked model state. Compare
+results only when their protocol, model identity, context, sampling, and
+intervention configuration match.
 
 ---
 
 ## What This Is Not
 
-This is a research instrument, not a production safety layer. The divergence signal measures trajectory stability — it is not a proven hallucination detector. The controller is proportional, not PID. Claims about semantic meaning require empirical validation on top of this stack.
-Downstream validity remains an open question; see `docs/observer_paper.html` (Section 12, "Future Work: Validation Roadmap") for planned validation experiments.
-Contributions toward that roadmap are welcome: downstream correlation, attractor-basin replication, and signal-baseline comparison.
+This is a research instrument, not a production safety layer. The diagnostics
+describe runtime behavior; they are not proven hallucination, correctness,
+danger, or instability detectors. The historical controller is not validated.
+Claims about semantic meaning require new evidence on top of the repaired
+foundation.
 
 ---
 
 ## Reproducibility
 
-- Deterministic branchpointing before every baseline/intervention split
-- Config hashing and seed cache fingerprints in all run artifacts
+- Exact final-config hashing and authoritative loaded-model identity
+- Cache fingerprints wherever a matched context is claimed
+- Independent local counterfactual forks and paired sampling RNG
+- Explicit matched-recovery validity metadata
+- Simple diagnostic baselines plus a deterministic synthetic validator
 - Experimental runs reported in the paper were executed on a single NVIDIA H200 GPU via RunPod
 - Reporting checklist in `REPRODUCIBILITY.md`
 
@@ -199,8 +262,9 @@ scripts/                     offline analyzers, warm-model daemon, console
 tests/                       guard tests (CLI parsing, doc/CI hygiene)
 runs/                        local run artifacts (ignored by git)
 docs/                        paper, workflow note, assets
-RESEARCH.md                  active mapping program (Phase 2)
+RESEARCH.md                  active evidence ledger and calibration program
 RESEARCH_CONTROLLER.md       archived controller arc (Phase 1, F1–F29)
+docs/OBSERVER_FOUNDATIONS.md active scientific/runtime contract
 baseline_hysteresis_v1/      legacy v1 hysteresis prototype (historical)
 v1.5/                        legacy v1.5 observability prototype (historical)
 intervention_engine_v1.5_v2/ legacy v2 intervention prototype (historical)

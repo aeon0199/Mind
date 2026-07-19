@@ -2,11 +2,15 @@
 
 This is the default workflow for experiment-driven work in `observer`.
 
-The goal is simple: make one clear change, run one clear experiment, record one honest result.
+The goal is simple: make one clear change, run one clear experiment, record one
+honest result. Observer's active order is **Observe → Perturb → Compare →
+Prove**. `Act` is downstream and controller work stays paused until the
+foundation produces evidence that meets the return criteria.
 
 ## 1. Orient Before Acting
 
-Open [RESEARCH.md](../RESEARCH.md) first.
+Open [OBSERVER_FOUNDATIONS.md](OBSERVER_FOUNDATIONS.md) and
+[RESEARCH.md](../RESEARCH.md) first.
 
 Read:
 - `§1 Current state`
@@ -20,6 +24,9 @@ Do not start coding or running experiments until you know:
 
 Also remember: each run's `summary.json` includes an `advisory` block with `observations`, `likely_causes`, `next_actions`, and `flags`. That advisory is part of the handoff between sessions and between agents, so read it when picking work up cold.
 
+Do not treat the advisory as stronger evidence than protocol validity or raw
+artifacts.
+
 If the human redirects, follow the redirect explicitly. Otherwise, pick the highest-value unchecked item in `§4`.
 
 ## 2. Write the Question Down
@@ -29,6 +36,8 @@ Frame the session as one sentence before doing work.
 Examples:
 - `Does drift-opposing additive intervention reduce avg_div vs shadow?`
 - `Does anchor-based reference outperform EMA opposition on the sourdough prompt?`
+- `At a matched local context, does magnitude 0.15 flip the next argmax?`
+- `After proven propagation, do matched recovery branches converge?`
 
 Write the success criterion before the run.
 
@@ -43,7 +52,9 @@ If there is no crisp question and no crisp success criterion, the run is probabl
 If code changes are needed:
 - make them first
 - keep them scoped to one logical change
+- run the proportional unit/contract tests
 - verify they compile before running experiments
+- run `scripts/validate_diagnostics.py` when diagnostic meaning changes
 
 Do not mix exploratory code edits, experiment execution, and interpretation in one sloppy batch.
 
@@ -71,13 +82,33 @@ Check:
 - `config.json`
 - `summary.json`
 - run id / run directory
-- intervention type
-- layer(s)
+- config hash recomputed from the saved final config
+- authoritative loaded-model identity
+- intervention type and protocol
+- requested and resolved layer(s)
 - seed(s)
-- controller settings
+- sampling settings
 - backend / model identity
+- context fingerprints wherever matching is claimed
+- `protocol_validity`
 
 If the saved config does not fully capture the meaningful knobs, fix that before claiming a result.
+
+For local branchpoint work, also require:
+
+- `mode == "branchpoints"`
+- `independent_one_step_forks == true`
+- every row has `contexts_matched == true`
+- clean pre-intervention features only
+- whole-run train/test splits
+
+For matched recovery, also require:
+
+- `protocol == "matched-exposure-recovery-v2"`
+- equal requested phase instructions
+- no recovery intervention on either branch
+- complete aligned recovery lengths
+- propagation above the configured floor before computing recovery
 
 ## 6. Interpret Honestly
 
@@ -87,6 +118,10 @@ Rules:
 - a mean hiding large variance is not a strong finding
 - a single-seed win is an anecdote, not a conclusion
 - `perturbation_did_not_propagate` means the run was uninformative, not stable
+- a downstream token difference after an earlier flip is propagation, not
+  another local branchpoint label
+- an unmatched re-ask is prompt/context persistence, not internal matched
+  recovery
 - if advisory flags say `no-op` or `noise-absorbed`, treat the result with skepticism and verify from raw metrics
 
 Use the advisory as a helper, not as the ground truth. Raw metrics and saved artifacts win.
@@ -101,6 +136,9 @@ Not every result needs the same claim strength.
 As a rule of thumb:
 - never promote a single-seed result into the main findings log as if it is settled
 - broader claims should usually have at least `>=3` seeds and `>=2` prompts
+- classifier metrics must report precision and recall beside AUROC and preserve
+  whole-run independence
+- a zero-perturbation control is required for causal perturbation claims
 
 If a result is helpful but still narrow, record it honestly as provisional rather than pretending it is final.
 

@@ -1,8 +1,20 @@
-# Observer Research Lab — Mapping Program
+# Observer Research Lab — Foundation-First Mapping Program
 
-_Active living document. This is Phase 2 of the Observer project. The controller arc (Phase 1) is complete and archived in [RESEARCH_CONTROLLER.md](RESEARCH_CONTROLLER.md)._
+_Active living document. Observer's current work begins with the repaired
+Observe → Perturb → Compare → Prove foundation. The controller arc is archived
+in [RESEARCH_CONTROLLER.md](RESEARCH_CONTROLLER.md)._
 
-Last updated: **2026-04-19** · Active agent: Claude Opus 4.7 (1M context) · Program start: **2026-04-19**
+Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
+
+> **2026-07-19 claim correction.** The foundation audit found that the
+> historical branchpoint analyzer labeled controller shadow/active token
+> differences as if every row were an independent same-context local
+> counterfactual. After the first flip, those branches have different contexts;
+> later labels are shifted or cascading consequences. The reported AUROCs are
+> preserved below, but they do not establish local flippability. F31 and Q1 are
+> reopened. The old hysteresis protocol also changed context and continued only
+> the perturbed branch; its perturbation effects remain observations, while its
+> recovery ratios and regime interpretations are provisional.
 
 ---
 
@@ -40,31 +52,61 @@ Last updated: **2026-04-19** · Active agent: Claude Opus 4.7 (1M context) · Pr
 
 ## 1. Current state
 
-- **North star**: *Observer's job is to map the geometry of trajectory sensitivity, persistence, and branchpoint behavior in Qwen3-1.7B.* Program scope is explicitly single-model. Cross-model generalization is a separate, later concern — not blocking any question here. The controller framing was falsified on Qwen3 (see RESEARCH_CONTROLLER.md §2 F4/F17/F21/F27/F28), but the instrument still has a lot to tell us about this model.
-- **Program structure**: three mapping questions, Q1–Q3 in §3. Each has a crisp stop condition so the work terminates cleanly.
+- **North star**: *Observer maps trajectory sensitivity, propagation,
+  persistence, and recovery through matched causal experiments.* The first
+  calibration target remains Qwen3-1.7B; cross-model generalization is later.
+- **Foundation contract**: [docs/OBSERVER_FOUNDATIONS.md](docs/OBSERVER_FOUNDATIONS.md).
+  Active work follows Observe → Perturb → Compare → Prove. Act is downstream.
+- **Program structure**: three mapping questions, Q1–Q3 in §3. Q1 is reopened
+  and must be answered with independent local branchpoint forks.
 - **Controller status**: **paused**, not dead. §4 defines the evidence that would bring controller research back to active status.
-- **Instrument status**: fully operational. Warm daemon, sampling, seed sweeps, drift-opposing actuation, decoupled measure/act layers, per-step diagnostics — all verified and working (see RESEARCH_CONTROLLER.md TD1, §F17–F29).
-- **Next recommended action**: **M2.1 — offline perturbation propagation analysis.** Q1 is closed (F31). Q2 asks how a perturbation at layer L evolves through the stack. We already have stress runs at varying `intervention_layer` with probe hooks at multiple layers — extract per-layer delta L2 norms from existing events.jsonl data (no new runs needed initially). Write a companion analyzer similar to `scripts/analyze_branchpoints.py`. Expected time: ~1 hour offline. If existing data isn't rich enough (e.g., only 2 probe layers logged), queue M2.2 as a code+experiment task for Codex.
+- **Instrument status**: foundation mechanics repaired and covered by automated
+  contracts: canonical event semantics, authoritative provenance, loaded-model
+  layer resolution, independent local branchpoints, matched recovery, and
+  diagnostic baselines. Scientific calibration on the target model is next.
+- **Next recommended action**: after the release verification matrix passes,
+  run a small local-branchpoint and matched-hysteresis calibration suite across
+  at least three seeds and two prompts. Include zero and nonzero magnitudes.
+  Analyze only `branchpoint_run_*` artifacts for Q1, grouped by whole run.
 
 ---
 
 ## 2a. Mapping-program findings
 
-- **F31** — **(M1.2) Q1 CLOSED on Qwen3-1.7B. Within-prompt flippability predictor clears the threshold on both prompts tested — but the predictive features are prompt-class-dependent.** Ran 10 additional control runs on a second prompt ("Describe the water cycle in a few sentences.") using the same config that worked on sourdough (L=-1 measure/act, additive opposing+anchor, mag=0.3/0.6, temp=0.8, 5 seeds). Analyzer results on Qwen3-only, opposing-anchor slice:
+- **F31 — REOPENED** — **The historical controller-paired AUROCs are invalid
+  for the claimed local-flippability question.** The original M1.2 ran 10
+  additional controller runs on a second prompt ("Describe the water cycle in
+  a few sentences") and analyzed shadow/active token differences:
   - **Sourdough alone** (12 pairs / 576 rows): held-out AUROC **0.82**, top features `spectral.permutation_change` (+), `layer_stiffness.-1.elasticity` (+), `svd.top1_energy_frac` (+)
   - **Water cycle alone** (5 pairs / 240 rows): held-out AUROC **0.86**, top feature `step_idx` alone reaches AUROC 0.80; other features include `svd.effective_rank` (+), `spectral.permutation_change` (**negative** — flips sign vs sourdough)
   - **Combined** (17 pairs / 816 rows): held-out AUROC 0.99 — likely inflated by pair-level random split landing easy watercycle pairs in test; per-prompt numbers above are the trustworthy ones
   - **Universal predictor across prompts**: `step_idx` (later tokens more flippable in both). Mechanistically sensible: baseline divergence accumulates with length, branchpoint density rises.
   - **Prompt-class dependence**: `spectral.permutation_change` is a POSITIVE predictor on sourdough (how-to-style) and NEGATIVE on watercycle (descriptive). This means different prompt classes drive Qwen3 into different trajectory structures, and what "looks like" a branchpoint geometrically is prompt-type-dependent.
-  - **Q1 verdict (Qwen3-1.7B)**: ✓ CLOSED. Stop condition (AUROC ≥ 0.80) met on both prompts independently. Evidence standard (≥3 seeds, ≥2 prompts, within Qwen3) met.
-  - Confidence: **high** on the main claim (flippability is predictable per-prompt); **medium** on the prompt-class-dependence claim (n=2 prompts, want more to confirm the structure).
+  - **Why invalid for Q1:** the active branch continued after intervention. Once
+    a token differed, all later active tokens were conditioned on a different
+    context. Those rows label cascaded trajectory divergence, not whether a
+    perturbation at the same clean context flips the next decision.
+  - **Additional risk:** sequence position can predict accumulated divergence,
+    making the strong `step_idx` result evidence of shifted labels rather than a
+    local causal boundary.
+  - **What remains useful:** the saved outputs establish that interventions can
+    alter continued trajectories, and the AUROCs are a valuable audit example
+    of why causal labels need same-context forks.
+  - **Q1 verdict:** **REOPENED.** Rerun with
+    `runtime_lab.cli.main branchpoints`, whole-run splits, clean
+    pre-intervention features, and precision/recall as well as AUROC.
+  - Confidence in this correction: **high**, from the protocol semantics.
 
-- **F30** — **(M1.1 offline branchpoint analysis on Qwen3-1.7B) [superseded by F31] Q1 partially answered: the stop-threshold AUROC is met on one prompt, but the evidence standard needs a second prompt to close.** Using existing Qwen3-1.7B control runs with pair-level train/test split and shadow-features-only (after fixing a circular-feature leak in Codex's initial smoke test, which had reused active-event features that tautologically correlate with the flip label): held-out AUROC on the Qwen3-only sourdough × opposing-anchor × L=-1 slice is **0.82** across 12 valid pairs / 576 step rows / 4 seeds.
+- **F30** — **(historical M1.1 controller-paired analysis; invalidated for
+  local Q1 together with F31).** Using existing Qwen3-1.7B controller runs with
+  pair-level train/test split and shadow-features-only produced held-out AUROC
+  **0.82** across 12 pairs / 576 rows / 4 seeds.
   - Stop condition (§3 Q1): AUROC ≥ 0.80. ✓ met on this slice.
   - Evidence standard (§3 Q1): ≥3 seeds AND ≥2 prompts within Qwen3-1.7B. Seeds ✓ (4). Prompts ✗ (only sourdough has valid shadow/active pairs in the archive).
   - Top predictive features (shadow trajectory only, clean): `spectral.permutation_change` (trajectory-axis FFT response), `spectral.total_power` (higher = less flippable), `layer_stiffness.-1.elasticity` (low final-layer velocity = flippable), `svd.top1_energy_frac` (concentrated trajectory = flippable), `step_idx` (later tokens more flippable).
   - **Interpretation**: within Qwen3-1.7B on this prompt, hidden-state geometry features from the clean trajectory predict flippability at 0.82 AUROC. Mechanistically coherent: flippable steps are low-velocity, spectrally-broad-but-low-power, concentrated in a dominant direction, and later in the sequence.
-  - **Next step to close Q1 on Qwen3**: run a small targeted suite on a second Qwen3 prompt (e.g., "Describe the water cycle" or "Explain how airplanes fly") — 5 seeds × 2 cells (shadow + opposing-anchor at L=-1 mag=0.3/0.6) = 10 runs, ~1 min with daemon. Then rerun the analyzer combining both prompts; if within-Qwen3 AUROC holds ≥0.80, Q1 is closed for this program.
+  - **Correction:** shadow features removed direct feature leakage, but did not
+    repair the shifted/cascading label. This analysis cannot close Q1.
   - Artifacts: analyzer at `scripts/analyze_branchpoints.py`, commit `1ec2c14`.
   - Confidence: **medium** (1 prompt, 4 seeds, mechanistically consistent features, but prompt-breadth evidence standard not yet met).
 
@@ -75,8 +117,14 @@ _These are motivating evidence for the mapping program. Full records in RESEARCH
 - **F13** (cited): reproducible drift operating point at (Qwen3-1.7B, L27, noise_mag=1.0, factual, temp=0.8) — drift 1.96 ± 0.37, DSR=5.36 across 5 seeds. The instrument can produce reproducible perturbation effects.
 - **F17 / F22**: scaling at final layer is absorbed by the model's final RMSNorm. Zero effect on logits. Don't use scaling as an intervention class at L=-1.
 - **F18**: additive at L=-1 with mag=1.0 produces reproducible decision-distribution shifts (logit_kl=10.40, DSR=3.73, 85% token flip rate on factual prompts).
-- **F25 Part A** (**generalizes across Qwen3 + TinyLlama**): additive perturbation at final transformer layer can flip individual tokens at close-margin branchpoints. Architecture-general mechanism.
-- **F25 Part B** (**Qwen3-specific**): the hijacked trajectory landing in a *lower-divergence* basin was specific to Qwen3's degenerate sourdough baseline. On TinyLlama, same mechanism drops trajectories into *worse* basins. Basin-hop direction is not a general law.
+- **F25 Part A (corrected boundary)**: continued final-layer additive
+  interventions produced token/output changes in both Qwen3 and TinyLlama
+  runs. Whether the same-context local flip mechanism generalizes is reopened
+  for the independent branchpoint protocol.
+- **F25 Part B (historical observation)**: changed Qwen3 sourdough outputs
+  sometimes landed in lower local-prediction-error continuations, while changed
+  TinyLlama outputs degraded. Basin direction is not established as a general
+  law.
 - **F27**: acting 1–2 layers back from the final layer produces WORSE control, not better. Mid-stack interventions cascade destructively. Layer-move hypothesis is falsified.
 - **F28** (the big one): the divergence signal measures token-level prose surprise (word-starts, semantic transitions, punctuation) — not dynamical instability. The original controller trigger wasn't what we thought it was.
 
@@ -96,7 +144,10 @@ Three questions, each a deliberate research program with a stop condition. Work 
 - hidden-state delta norm from prior step
 - predicted next-token divergence
 
-**Evidence standard** (Qwen3-1.7B scope): ≥3 seeds, ≥2 prompts within Qwen3-1.7B. Held-out test set at pair level. Cross-model generalization is a separate, later concern — not required to close Q1 for this program.
+**Evidence standard** (Qwen3-1.7B scope): ≥3 seeds, ≥2 prompts within
+Qwen3-1.7B. Labels must come from independent one-step forks with a verified
+shared context. Train/test splits hold out whole runs, and all preprocessing is
+fit on training runs only. Cross-model generalization is later.
 
 **Stop condition**: a feature-based rule achieves precision ≥0.7 AND recall ≥0.5 on held-out runs. If no single rule gets there, we can train a simple logistic regression / decision tree — still counts if AUROC ≥ 0.8.
 
@@ -105,7 +156,9 @@ Three questions, each a deliberate research program with a stop condition. Work 
 - It's the direct path back to a smarter controller — predictable branchpoints = designable trigger.
 - Matches where mechanistic interpretability research is going.
 
-**Current status**: not started. M1.1 planned as the first step using existing data.
+**Current status**: **reopened after the 2026-07-19 protocol audit.** The local
+branchpoint runner and corrected analyzer are implemented; the target-model
+calibration suite has not yet been run.
 
 ---
 
@@ -164,11 +217,39 @@ If any two land, a controller redesign experiment is warranted. If none land dur
 
 ## 5. Mapping backlog
 
-Order: do M1.1 first (free, might answer Q1 from existing data). Then M2.1 and M3.1 in parallel (low cost, leverage data). Only move to M1.2 / M2.2 / M3.2 if earlier results don't settle the question.
+Order: complete release verification, then M1R and MHR together. Do not return
+to controller work until the repaired foundation produces calibrated evidence.
 
-### [~] M1.1 — Offline branchpoint analysis from existing control runs *(partial pass, 2026-04-19)*
-- **Outcome**: analyzer at `scripts/analyze_branchpoints.py` (Codex wrote, Claude fixed a circular-feature leak). Honest cross-model AUROC 0.77 (fails 0.80 bar); same-model AUROC 0.82 (passes). See F30.
-- **Status**: complete on existing data. Gap identified: need top-2 logit margin + per-step logit entropy as architecture-invariant features. Queued as M1.2.
+### [ ] M1R — Recalibrate local branchpoint flippability
+
+- **Question**: Can clean pre-intervention features predict a one-step argmax
+  flip under an independently forked, same-context additive perturbation?
+- **Design**: at least 3 seeds × 2 prompts × zero/nonzero magnitudes using
+  `runtime_lab.cli.main branchpoints`. Analyze only `branchpoint_run_*`
+  artifacts with repeated whole-run splits.
+- **Stop condition**: precision ≥0.7 and recall ≥0.5, or AUROC ≥0.8, with
+  per-split min/max and both prompt slices reported. Zero magnitude must produce
+  no local flips.
+- **Outcome**: _(pending release verification and target-model runs)_
+
+### [ ] MHR — Calibrate matched hysteresis
+
+- **Question**: After a perturbation propagates beyond its active window, how
+  much clean-vs-perturbed separation persists during equal,
+  intervention-free continuations?
+- **Design**: same prompts/seeds as M1R, zero plus several nonzero magnitudes,
+  sufficient exposure for at least one post-intervention decision, fixed
+  recovery length.
+- **Stop condition**: every classified run has
+  `matched_recovery=true`; zero magnitude reports no propagation; report direct,
+  propagated, and residual distance rather than regime counts alone.
+- **Outcome**: _(pending release verification and target-model runs)_
+
+### [!] Historical M1.1 — Offline analysis from controller runs *(invalid for local Q1)*
+- **Outcome**: the historical analyzer reported cross-model AUROC 0.77 and
+  same-model AUROC 0.82 after a direct active-feature leak was removed.
+- **Correction**: the shadow/active token-difference label still became shifted
+  after the first divergent token. See F30/F31 — REOPENED.
 - **Archived task entry** (preserving original design for context):
 
 ### [ ] M1.1 — Offline branchpoint analysis from existing control runs (original task)
@@ -186,17 +267,17 @@ Order: do M1.1 first (free, might answer Q1 from existing data). Then M2.1 and M
 - **Outcome**: _(filled when complete)_
 - **Follow-ups**: _(filled when complete)_
 
-### [x] M1.2 — Close Q1 with a second Qwen3 prompt *(complete 2026-04-19)*
+### [!] Historical M1.2 — Second controller-run prompt *(completed, claim invalidated)*
 - **Outcome**: ran 10 control runs on "Describe the water cycle in a few sentences." with same config as M1.1's passing slice. All active cells fired (8-10 interventions per seed). Rerun of `scripts/analyze_branchpoints.py` on Qwen3-only opposing-anchor corpus:
   - Sourdough: AUROC 0.82 ✓
   - Water cycle: AUROC 0.86 ✓
   - Both prompts clear the 0.80 threshold independently
   - Top features differ between prompts: sourdough predictors are trajectory-geometry features (spectral.permutation_change, elasticity); water cycle's strongest single predictor is `step_idx` alone (AUROC 0.80)
-- **Q1 verdict**: ✓ CLOSED. See F31.
+- **Corrected verdict**: did not answer local Q1. See F31 — REOPENED.
 - **Follow-ups**:
   - Interesting side-finding worth its own write-up: `spectral.permutation_change` flips sign between prompt classes. Suggests Qwen3 uses different trajectory structures for how-to vs descriptive generation. Could be explored later as a small mapping sub-question.
 
-### [~] M1.2 — Close Q1 with a second Qwen3 prompt (original task entry, preserved)
+### [~] Historical M1.2 original task entry (preserved)
 - **Status**: queued 2026-04-19. Runs-only task (Claude).
 - **Question**: Does the M1.1 classifier (shadow-trajectory features → flip/no-flip prediction) generalize to a second Qwen3-1.7B prompt? Needed to meet Q1's ≥2 prompts evidence standard.
 - **Design**:
@@ -204,12 +285,15 @@ Order: do M1.1 first (free, might answer Q1 from existing data). Then M2.1 and M
   - Run 5 seeds × 2 cells (shadow + opposing-anchor additive at L=-1, mag=0.3/0.6, temp=0.8, max_tokens=48). 10 runs.
   - Run `scripts/analyze_branchpoints.py` on the combined corpus (sourdough + new prompt).
 - **Stop condition** (Q1 closure): within-Qwen3 held-out AUROC ≥ 0.80 across both prompts.
-- **Expected payoff**: Q1 cleanly closed on Qwen3-1.7B, M2 work unblocked. If AUROC drops significantly on the second prompt, that itself is interesting — means flippability features are prompt-type-specific within the same model.
+- **Historical expected payoff**: this was expected to settle Q1. The
+  2026-07-19 audit established that the label did not match the causal question.
 - **Expected runtime**: ~2 min with daemon.
 
-### [ ] M1.3 — Add logit-margin / logit-entropy logging (optional, for later)
-- **Status**: deferred. Would be useful if M1.2's combined-prompt classifier underperforms on the new prompt. Also useful for future cross-model work (out of scope for now).
-- **Owner**: Codex if triggered. ~30 lines in `adaptive_runner.py` + `observe/runner.py`.
+### [x] M1.3 — Add direct diagnostic baselines *(foundation rebuild)*
+- **Status**: complete 2026-07-19.
+- **Outcome**: canonical diagnostics now include top-1 margin, logit entropy,
+  hidden velocity, and hidden acceleration. The active local branchpoint format
+  records clean top-1 margin and clean diagnostics.
 
 ### [ ] M2.1 — Per-layer propagation measurement from existing data
 - **Question**: For the stress runs we already have at varying `intervention_layer`, extract the delta L2 norm at each probe_layer downstream of the injection. Build the propagation curve from existing events.jsonl layer_stiffness fields.
@@ -238,7 +322,18 @@ Order: do M1.1 first (free, might answer Q1 from existing data). Then M2.1 and M
 - **2026-04-19 · Program defined.** Pivoted from controller-focused to mapping-focused. Three questions (Q1 branchpoint geometry, Q2 propagation, Q3 basin structure) with stop conditions. Controller-return criteria specified. Next: M1.1.
 - **2026-04-19 · M1.1 ran, Qwen3 AUROC 0.82.** Codex wrote `scripts/analyze_branchpoints.py`. Claude caught + fixed a circular-feature leak (features from active events included intervention_applied, scale_used, etc. — tautological). With honest shadow-trajectory features on the Qwen3-1.7B sourdough slice, held-out AUROC is **0.82** across 12 pairs / 4 seeds — clears Q1's 0.80 threshold. F30 added. Remaining Q1 gap: ≥2 prompts evidence standard. M1.2 queued: run a second Qwen3 prompt suite.
 - **2026-04-19 · Scope correction.** Human redirected: mapping program is Qwen3-1.7B, not cross-model. Earlier M1.2 spec (add logit-margin logging for cross-model generalization) deferred to M1.3 / later work. Current M1.2 is a simple 10-run experiment on a second Qwen3 prompt.
-- **2026-04-19 · M1.2 complete. Q1 CLOSED.** Ran 10 water-cycle control runs, reanalyzed. Sourdough 0.82, water-cycle 0.86 — both pass 0.80 within-Qwen3. F31 added. Side-finding: `spectral.permutation_change` flips sign between prompt classes, suggesting prompt-class-dependent trajectory structure. Next: M2.1 propagation analysis.
+- **2026-04-19 · Historical M1.2 verdict (invalidated 2026-07-19).** Ten
+  water-cycle controller runs produced historical AUROCs of 0.82 and 0.86 and
+  were initially recorded as closing Q1. The later foundation audit found the
+  shifted/cascading-label defect; see the next entry and F31 — REOPENED.
+- **2026-07-19 · Foundation audit; F31/Q1 reopened.** Repaired event
+  semantics, provenance, loaded-model layer resolution, independent local
+  branchpoints, run-grouped analyzer splits, matched recovery, and simple
+  diagnostic baselines. The historical controller-paired AUROCs used
+  shifted/cascading labels after the first divergent token and cannot prove
+  local flippability. Historical perturbation effects remain observations;
+  unmatched recovery/regime claims are provisional. Next: verify the release,
+  then run M1R + MHR.
 
 _(For sessions covering the controller arc 2026-02 through 2026-04-19, see [RESEARCH_CONTROLLER.md](RESEARCH_CONTROLLER.md) §5.)_
 
