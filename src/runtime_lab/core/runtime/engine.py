@@ -230,7 +230,11 @@ class RuntimeEngine:
             and self.diagnostics_manager is not None
             and measure_hidden is not None
         ):
-            diagnostics = self.diagnostics_manager.step(measure_hidden, layer_states=layer_states)
+            diagnostics = self.diagnostics_manager.step(
+                measure_hidden,
+                layer_states=layer_states,
+                logits=logits,
+            )
 
         pre_norm = float(hidden_pre.norm().item()) if hidden_pre is not None else 0.0
         post_norm = float(hidden_post.norm().item()) if hidden_post is not None else 0.0

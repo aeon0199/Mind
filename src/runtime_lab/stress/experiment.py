@@ -111,7 +111,11 @@ def _trajectory_from_seed_cache(
 
         diagnostics0 = {}
         if diagnostics_manager is not None and hidden0 is not None:
-            diagnostics0 = diagnostics_manager.step(hidden0, layer_states={int(requested_layer_idx): hidden0})
+            diagnostics0 = diagnostics_manager.step(
+                hidden0,
+                layer_states={int(requested_layer_idx): hidden0},
+                logits=logits0,
+            )
 
         state0 = TokenState(
             token_idx=0,

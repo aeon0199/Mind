@@ -5,6 +5,7 @@ from typing import Dict, Optional
 import torch
 
 from runtime_lab.config.schemas import DiagnosticsConfig
+from .baselines import BaselineProbe
 from .layer_probe import LayerProbe, LayerProbeConfig
 from .predictor import DivergencePredictor
 from .spectral import SpectralTrajectoryProbe, SpectralTrajectoryConfig
@@ -54,6 +55,7 @@ class DiagnosticsManager:
         self.layer_probe = None
         self.svd_probe = None
         self.spectral_probe = None
+        self.baseline_probe = None
 
         if not self.enabled:
             return
@@ -64,6 +66,7 @@ class DiagnosticsManager:
                 proj_dim=self.config.predictor_proj_dim,
                 ridge=self.config.predictor_ridge,
             )
+            self.baseline_probe = BaselineProbe()
             self.svd_probe = WindowedSVDProbe(
                 WindowedSVDProbeConfig(
                     window_size=self.config.svd_window,
@@ -98,25 +101,50 @@ class DiagnosticsManager:
             self.svd_probe.reset()
         if self.spectral_probe is not None:
             self.spectral_probe.reset()
+        if self.baseline_probe is not None:
+            self.baseline_probe.reset()
 
     def step(
         self,
         hidden: Optional[torch.Tensor],
         layer_states: Optional[Dict[int, torch.Tensor]] = None,
+        logits: Optional[torch.Tensor] = None,
     ) -> Dict:
         if (not self.enabled) or hidden is None:
             return {}
 
-        out: Dict = {}
+        out: Dict = {
+            "hidden_velocity": None,
+            "hidden_acceleration": None,
+            "logit_entropy": None,
+            "top1_margin": None,
+        }
         health: Dict = {"enabled": True, "valid": True, "degraded": False, "issues": []}
 
         try:
-            out["divergence"] = float(self.predictor.step(hidden))
+            out.update(self.baseline_probe.step(hidden, logits=logits))
+        except Exception as e:
+            out["baseline_error"] = str(e)
+            health["degraded"] = True
+            health["issues"].append(
+                {"issue": "baseline_exception", "message": str(e)}
+            )
+
+        try:
+            local_prediction_error = float(self.predictor.step(hidden))
+            out["local_prediction_error"] = local_prediction_error
+            out["divergence"] = local_prediction_error
             predictor_health = getattr(self.predictor, "last_health", None) or {}
-            health["valid"] = bool(predictor_health.get("valid", True))
-            health["degraded"] = bool(predictor_health.get("degraded", False))
+            health["valid"] = bool(
+                health["valid"] and predictor_health.get("valid", True)
+            )
+            health["degraded"] = bool(
+                health["degraded"]
+                or predictor_health.get("degraded", False)
+            )
             health["issues"].extend(list(predictor_health.get("issues", []) or []))
         except Exception as e:
+            out["local_prediction_error_error"] = str(e)
             out["divergence_error"] = str(e)
             health["valid"] = False
             health["degraded"] = True
