@@ -7,6 +7,7 @@ __pycache__/
 
 # Env
 .venv/
+.worktrees/
 
 # OS/editor
 .DS_Store
