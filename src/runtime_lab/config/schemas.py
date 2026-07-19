@@ -51,6 +51,17 @@ class StressConfig(CommonRunConfig):
 
 
 @dataclass
+class BranchpointConfig(CommonRunConfig):
+    intervention_layer: int = -1
+    intervention_type: str = "additive"
+    intervention_magnitude: float = 0.15
+    intervention_magnitude_relative: bool = True
+    intervention_seed: int = 42
+    projection_subspace_dim: int = 1
+    with_diagnostics: bool = True
+
+
+@dataclass
 class HysteresisConfig(CommonRunConfig):
     original_question_label: str = "ORIGINAL_QUESTION"
     # Perturbation class. "prompt" (default, legacy) injects a synthetic

@@ -177,6 +177,7 @@ class RuntimeEngine:
         prompt_len: int,
         past_key_values: Any,
         intervention_active: bool = False,
+        collect_diagnostics: bool = True,
     ) -> StepResult:
         self.intervention_hook.set_active(bool(intervention_active))
         for cap in self.capture_hooks.values():
@@ -224,7 +225,11 @@ class RuntimeEngine:
                 layer_states[int(raw_idx)] = measure_hidden
 
         diagnostics = {}
-        if self.diagnostics_manager is not None and measure_hidden is not None:
+        if (
+            collect_diagnostics
+            and self.diagnostics_manager is not None
+            and measure_hidden is not None
+        ):
             diagnostics = self.diagnostics_manager.step(measure_hidden, layer_states=layer_states)
 
         pre_norm = float(hidden_pre.norm().item()) if hidden_pre is not None else 0.0

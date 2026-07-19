@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 
+from . import branchpoints as branchpoints_cli
 from . import control as control_cli
 from . import hysteresis as hysteresis_cli
 from . import observe as observe_cli
@@ -18,6 +19,12 @@ def main() -> None:
     stress_parser = sub.add_parser("stress", help="Branchpoint intervention stress test")
     stress_cli.add_stress_args(stress_parser)
 
+    branchpoint_parser = sub.add_parser(
+        "branchpoints",
+        help="Independent local counterfactual branchpoint map",
+    )
+    branchpoints_cli.add_branchpoint_args(branchpoint_parser)
+
     hysteresis_parser = sub.add_parser("hysteresis", help="BASE -> PERTURB -> REASK protocol")
     hysteresis_cli.add_hysteresis_args(hysteresis_parser)
 
@@ -30,6 +37,8 @@ def main() -> None:
         observe_cli.run_from_args(args)
     elif args.mode == "stress":
         stress_cli.run_from_args(args)
+    elif args.mode == "branchpoints":
+        branchpoints_cli.run_from_args(args)
     elif args.mode == "hysteresis":
         hysteresis_cli.run_from_args(args)
     elif args.mode == "control":

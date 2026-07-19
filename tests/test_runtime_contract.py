@@ -5,6 +5,10 @@ import torch
 
 from runtime_lab.core.runtime.engine import RuntimeEngine
 from runtime_lab.core.runtime.events import RuntimeEvent, runtime_event_to_record
+from runtime_lab.core.model.cache_utils import (
+    clone_past_key_values,
+    compute_cache_fingerprint,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -107,3 +111,24 @@ def test_observe_and_control_use_the_canonical_event_serializer():
 
     assert "runtime_event_to_record(step.event)" in observe
     assert "runtime_event_to_record(ctrl_evt)" in control
+
+
+def test_transformers_v5_layer_cache_can_be_cloned_and_fingerprinted():
+    key = torch.arange(24, dtype=torch.float32).reshape(1, 1, 6, 4)
+
+    class V5Cache:
+        def __init__(self):
+            self.layers = [
+                SimpleNamespace(keys=key.clone(), values=(key + 1).clone())
+            ]
+
+        def get_seq_length(self):
+            return int(self.layers[0].keys.shape[-2])
+
+    source = V5Cache()
+    clone = clone_past_key_values(source)
+
+    assert compute_cache_fingerprint(source) != "unavailable"
+    assert compute_cache_fingerprint(source) == compute_cache_fingerprint(clone)
+    clone.layers[0].keys.add_(100)
+    assert not torch.equal(source.layers[0].keys, clone.layers[0].keys)

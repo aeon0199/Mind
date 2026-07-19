@@ -59,6 +59,13 @@ def _extract_first_key_tensor(past_key_values: Any):
         return past_key_values.key_cache[0]
     except Exception:
         pass
+    try:
+        for layer in past_key_values.layers:
+            key = getattr(layer, "keys", None)
+            if isinstance(key, torch.Tensor):
+                return key
+    except Exception:
+        pass
     return None
 
 

@@ -23,7 +23,10 @@ def build_intervention(kind: str, **kwargs: Any):
 
     if kind == "projection":
         return ProjectionIntervention(
-            subspace_dim=int(kwargs.get("subspace_dim", kwargs.get("magnitude", 10))),
+            subspace_dim=max(
+                1,
+                int(kwargs.get("subspace_dim", kwargs.get("magnitude", 10))),
+            ),
             seed=int(kwargs.get("seed", 42)),
         )
 
