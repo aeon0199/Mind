@@ -7,6 +7,7 @@ from runtime_lab.basins.evaluators import (
     get_prompt_spec,
     score_output,
 )
+from runtime_lab.basins.experiment import run_basin_experiment
 
 __all__ = [
     "PROMPT_SPECS",
@@ -14,4 +15,5 @@ __all__ = [
     "compare_outputs",
     "get_prompt_spec",
     "score_output",
+    "run_basin_experiment",
 ]

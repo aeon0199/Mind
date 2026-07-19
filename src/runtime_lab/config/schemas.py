@@ -72,6 +72,23 @@ class PropagationConfig(CommonRunConfig):
 
 
 @dataclass
+class BasinConfig(CommonRunConfig):
+    prompt_key: str = "custom"
+    prompt_class: str = "custom"
+    evaluator_id: str = "deterministic-prompt-rubric-v1"
+    intervention_layer: int = -1
+    intervention_type: str = "additive"
+    intervention_magnitude: float = 0.30
+    intervention_magnitude_relative: bool = True
+    intervention_seed: int = 42
+    projection_subspace_dim: int = 1
+    continuation_tokens: int = 48
+    max_episodes: int = 3
+    tie_tolerance: float = 0.025
+    with_diagnostics: bool = True
+
+
+@dataclass
 class HysteresisConfig(CommonRunConfig):
     original_question_label: str = "ORIGINAL_QUESTION"
     # The foundation protocol uses matched clean/perturbed hidden-state
