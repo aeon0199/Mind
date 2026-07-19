@@ -2,18 +2,17 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import torch
 
 from runtime_lab.config.schemas import CommonRunConfig, DiagnosticsConfig
+from runtime_lab.core.backend.identity import resolved_model_identity
 from runtime_lab.core.backend.loader import load_model_with_backend
 from runtime_lab.core.diagnostics.manager import DiagnosticsManager, summarize_diagnostics_health
-from runtime_lab.core.io.artifacts import ensure_dir
-from runtime_lab.core.io.hashing import hash_config
 from runtime_lab.core.io.json import save_json
+from runtime_lab.core.io.run_artifacts import create_run_dir, write_config_record
 from runtime_lab.core.runtime.engine import RuntimeEngine
 from runtime_lab.core.runtime.events import runtime_event_to_record
 
@@ -49,8 +48,8 @@ def run_observe_experiment(
     tokenizer = backend_result.tokenizer
     model = backend_result.model
     device = backend_result.device
-    model_cfg = backend_result.config
-    model_id = config.model_key or getattr(model_cfg, "key", None) or "unknown"
+    model_identity = resolved_model_identity(config.model_key, backend_result)
+    model_id = str(model_identity["model"])
 
     diag_cfg = diagnostics_config or DiagnosticsConfig(
         enabled=True,
@@ -75,7 +74,7 @@ def run_observe_experiment(
     run_config = {
         "mode": "observe",
         "prompt": config.prompt,
-        "model": model_id,
+        **model_identity,
         "backend": backend_result.backend,
         "backend_meta": dict(backend_result.backend_meta),
         "max_new_tokens": int(config.max_new_tokens),
@@ -83,21 +82,21 @@ def run_observe_experiment(
         "temperature": float(getattr(config, "temperature", 0.0)),
         "top_p": float(getattr(config, "top_p", 1.0)),
         "top_k": int(getattr(config, "top_k", 0)),
-        "probe_layers_resolved": list(diag_cfg.probe_layers),
+        "probe_layers_resolved": list(dict.fromkeys(engine.probe_resolved.values())),
+        "measure_resolved_layer_idx": int(engine.measure_resolved_layer_idx),
+        "act_resolved_layer_idx": int(engine.act_resolved_layer_idx),
         "num_layers": int(engine.num_layers),
     }
-    cfg_hash = hash_config(run_config)
 
-    base_runs = ensure_dir(runs_dir or os.environ.get("RUNS_DIR", "runs"))
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = ensure_dir(base_runs / f"observe_run_{stamp}")
+    run_id, run_dir = create_run_dir(
+        runs_dir or os.environ.get("RUNS_DIR", "runs"),
+        "observe",
+    )
 
     events_path = Path(run_dir) / "events.jsonl"
     summary_path = Path(run_dir) / "summary.json"
     output_path = Path(run_dir) / "output.txt"
-    config_path = Path(run_dir) / "config.json"
-
-    save_json(str(config_path), {"config_hash": cfg_hash, "config": run_config})
+    cfg_hash, config_path = write_config_record(run_dir, run_config)
 
     generated_text = ""
     events: list[Dict[str, Any]] = []
@@ -149,6 +148,7 @@ def run_observe_experiment(
     summary = {
         "config_hash": cfg_hash,
         "mode": "observe",
+        "run_id": run_id,
         "run_dir": str(run_dir),
         "model_id": model_id,
         "backend": backend_result.backend,

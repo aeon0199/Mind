@@ -33,12 +33,15 @@ from typing import Any, Dict
 # Keep the parent process's MPS context by forcing eager evaluation.
 os.environ.setdefault("PYTHONUNBUFFERED", "1")
 
-# IMPORTANT: capture real stdout FIRST, before anything else writes to it.
-# Experiment runners sprinkle print() statements that pollute the JSON
-# protocol; we redirect sys.stdout to stderr so only our ack writes
-# reach the parent's stdout pipe.
-_ACK_OUT = sys.stdout
-sys.stdout = sys.stderr
+_ACK_OUT = None
+
+
+def _configure_protocol_streams() -> None:
+    """Keep imports side-effect free; redirect runner output only in daemon mode."""
+    global _ACK_OUT
+    if _ACK_OUT is None:
+        _ACK_OUT = sys.stdout
+        sys.stdout = sys.stderr
 
 
 def _log(msg: str) -> None:
@@ -47,8 +50,9 @@ def _log(msg: str) -> None:
 
 
 def _write_ack(payload: Dict[str, Any]) -> None:
-    _ACK_OUT.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    _ACK_OUT.flush()
+    target = _ACK_OUT or sys.stdout
+    target.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    target.flush()
 
 
 def _serialize_summary(payload: Any) -> Dict[str, Any]:
@@ -59,14 +63,31 @@ def _serialize_summary(payload: Any) -> Dict[str, Any]:
     return {"raw": str(payload)}
 
 
+def _merged_request_config(request: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge the documented nested config with flat overrides."""
+    nested = request.get("config") or {}
+    if not isinstance(nested, dict):
+        raise ValueError("request.config must be a JSON object")
+    merged = dict(nested)
+    merged.update({key: value for key, value in request.items() if key != "config"})
+    return merged
+
+
+def _int_with_default(value: Any, default: int) -> int:
+    return int(default if value is None else value)
+
+
 def _build_config_observe(cfg: Dict[str, Any]):
     from runtime_lab.config.schemas import CommonRunConfig
     return CommonRunConfig(
         prompt=cfg["prompt"],
-        model_key=cfg.get("model"),
-        max_new_tokens=int(cfg.get("max_tokens", 64)),
+        model_key=cfg.get("model", cfg.get("model_key")),
+        max_new_tokens=_int_with_default(
+            cfg.get("max_tokens", cfg.get("max_new_tokens")),
+            64,
+        ),
         backend=cfg.get("backend", "hf"),
-        seed=int(cfg.get("seed", 42)),
+        seed=_int_with_default(cfg.get("seed"), 42),
         temperature=float(cfg.get("temperature", 0.0)),
         top_p=float(cfg.get("top_p", 1.0)),
         top_k=int(cfg.get("top_k", 0)),
@@ -79,10 +100,13 @@ def _build_config_stress(cfg: Dict[str, Any]):
     layer = resolve_semantic_layer(cfg.get("layer", "mid"), None)
     return StressConfig(
         prompt=cfg["prompt"],
-        model_key=cfg.get("model"),
-        max_new_tokens=int(cfg.get("max_tokens", 64)),
+        model_key=cfg.get("model", cfg.get("model_key")),
+        max_new_tokens=_int_with_default(
+            cfg.get("max_tokens", cfg.get("max_new_tokens")),
+            64,
+        ),
         backend=cfg.get("backend", "hf"),
-        seed=int(cfg.get("seed", 42)),
+        seed=_int_with_default(cfg.get("seed"), 42),
         intervention_layer=int(layer),
         intervention_type=str(cfg.get("intervention_type", "additive")),
         intervention_magnitude=float(cfg.get("magnitude", 0.15)),
@@ -101,10 +125,13 @@ def _build_config_hysteresis(cfg: Dict[str, Any]):
     from runtime_lab.cli._common import resolve_semantic_layer
     return HysteresisConfig(
         prompt=cfg["prompt"],
-        model_key=cfg.get("model"),
-        max_new_tokens=int(cfg.get("max_tokens", 128)),
+        model_key=cfg.get("model", cfg.get("model_key")),
+        max_new_tokens=_int_with_default(
+            cfg.get("max_tokens", cfg.get("max_new_tokens")),
+            128,
+        ),
         backend=cfg.get("backend", "hf"),
-        seed=int(cfg.get("seed", 42)),
+        seed=_int_with_default(cfg.get("seed"), 42),
         perturbation_mode=str(cfg.get("perturbation_mode", "prompt")),
         noise_layer=resolve_semantic_layer(cfg.get("noise_layer", "mid"), None),
         noise_magnitude=float(cfg.get("noise_magnitude", 0.15)),
@@ -121,10 +148,13 @@ def _build_config_control(cfg: Dict[str, Any]):
     from runtime_lab.config.schemas import ControlConfig
     return ControlConfig(
         prompt=cfg["prompt"],
-        model_key=cfg.get("model"),
-        max_new_tokens=int(cfg.get("max_tokens", 64)),
+        model_key=cfg.get("model", cfg.get("model_key")),
+        max_new_tokens=_int_with_default(
+            cfg.get("max_tokens", cfg.get("max_new_tokens")),
+            64,
+        ),
         backend=cfg.get("backend", "hf"),
-        seed=int(cfg.get("seed", 42)),
+        seed=_int_with_default(cfg.get("seed"), 42),
         measure_layer=int(cfg.get("measure_layer", -1)),
         act_layer=int(cfg.get("act_layer", -1)),
         intervention_type=str(cfg.get("intervention_type", "scaling")),
@@ -137,6 +167,13 @@ def _build_config_control(cfg: Dict[str, Any]):
         ema_warmup_tokens=int(cfg.get("ema_warmup_tokens", 3)),
         anchor_tokens=int(cfg.get("anchor_tokens", 3)),
         shadow=bool(cfg.get("shadow", False)),
+        ma_window=int(cfg.get("ma_window", 3)),
+        threshold_warn=float(cfg.get("threshold_warn", 0.55)),
+        threshold_crit=float(cfg.get("threshold_crit", 0.85)),
+        scale_warn=float(cfg.get("scale_warn", 0.90)),
+        scale_crit=float(cfg.get("scale_crit", 0.75)),
+        hold_warn=int(cfg.get("hold_warn", 3)),
+        hold_crit=int(cfg.get("hold_crit", 6)),
         temperature=float(cfg.get("temperature", 0.0)),
         top_p=float(cfg.get("top_p", 1.0)),
         top_k=int(cfg.get("top_k", 0)),
@@ -147,13 +184,14 @@ def _run_request(request: Dict[str, Any], backend) -> Dict[str, Any]:
     mode = str(request.get("mode") or "").lower()
     registry_path = request.get("registry_path", "models.json")
     runs_dir = request.get("runs_dir")
+    cfg_values = _merged_request_config(request)
 
     if mode == "observe":
         from runtime_lab.observe.runner import run_observe_experiment
         from runtime_lab.config.schemas import DiagnosticsConfig
         from runtime_lab.cli._common import resolve_probe_layers
-        cfg = _build_config_observe(request)
-        probe_layers = resolve_probe_layers(request.get("probe_layers", "auto"), None)
+        cfg = _build_config_observe(cfg_values)
+        probe_layers = resolve_probe_layers(cfg_values.get("probe_layers", "auto"), None)
         diag = DiagnosticsConfig(enabled=True, probe_layers=probe_layers)
         summary = run_observe_experiment(
             config=cfg, registry_path=registry_path, runs_dir=runs_dir,
@@ -165,8 +203,8 @@ def _run_request(request: Dict[str, Any], backend) -> Dict[str, Any]:
         from runtime_lab.stress.experiment import run_stress_experiment
         from runtime_lab.config.schemas import DiagnosticsConfig
         from runtime_lab.cli._common import resolve_probe_layers
-        cfg = _build_config_stress(request)
-        probe_layers = resolve_probe_layers(request.get("probe_layers", "auto"), None)
+        cfg = _build_config_stress(cfg_values)
+        probe_layers = resolve_probe_layers(cfg_values.get("probe_layers", "auto"), None)
         if int(cfg.intervention_layer) not in probe_layers:
             probe_layers = [int(cfg.intervention_layer), *probe_layers]
         diag = DiagnosticsConfig(enabled=True, probe_layers=probe_layers)
@@ -178,7 +216,7 @@ def _run_request(request: Dict[str, Any], backend) -> Dict[str, Any]:
 
     if mode == "hysteresis":
         from runtime_lab.hysteresis.runner import run_hysteresis_experiment
-        cfg = _build_config_hysteresis(request)
+        cfg = _build_config_hysteresis(cfg_values)
         summary = run_hysteresis_experiment(
             config=cfg, registry_path=registry_path, runs_dir=runs_dir,
             prebuilt_backend=backend,
@@ -189,15 +227,15 @@ def _run_request(request: Dict[str, Any], backend) -> Dict[str, Any]:
         from runtime_lab.control.adaptive_runner import run_control_experiment
         from runtime_lab.config.schemas import DiagnosticsConfig
         from runtime_lab.cli._common import resolve_probe_layers
-        cfg = _build_config_control(request)
-        probe_layers = resolve_probe_layers(request.get("probe_layers", "auto"), None)
+        cfg = _build_config_control(cfg_values)
+        probe_layers = resolve_probe_layers(cfg_values.get("probe_layers", "auto"), None)
         if int(cfg.measure_layer) not in probe_layers:
             probe_layers = [int(cfg.measure_layer), *probe_layers]
         diag = DiagnosticsConfig(enabled=True, probe_layers=probe_layers)
         summary = run_control_experiment(
             config=cfg, registry_path=registry_path, runs_dir=runs_dir,
             diagnostics_config=diag, prebuilt_backend=backend,
-            generate_dashboard_html=bool(request.get("generate_dashboard_html", True)),
+            generate_dashboard_html=bool(cfg_values.get("generate_dashboard_html", True)),
         )
         return {"ok": True, "mode": mode, "summary": summary}
 
@@ -209,6 +247,7 @@ def _make_ack(run_dir: str) -> Dict[str, Any]:
 
 
 def main() -> None:
+    _configure_protocol_streams()
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="model key from models.json")
     ap.add_argument("--backend", default="hf")
@@ -224,7 +263,11 @@ def main() -> None:
     )
     _log(f"model loaded · device={backend_result.device} · ready.")
     # Emit a hello line so clients know the daemon is alive.
-    _write_ack({"event": "ready", "model": args.model, "device": str(backend_result.device)})
+    _write_ack({
+        "event": "ready",
+        "model": backend_result.config.key,
+        "device": str(backend_result.device),
+    })
 
     for raw in sys.stdin:
         raw = raw.strip()

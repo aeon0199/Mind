@@ -11,17 +11,16 @@ import argparse
 import json
 import os
 import queue
-import re
 import signal
 import subprocess
+import sys
 import threading
 import time
 import uuid
 import webbrowser
-from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
 
@@ -267,6 +266,71 @@ BUS = EventBus()
 # ---------------------------------------------------------------------------
 
 
+def build_cli_command(payload: Dict[str, Any]) -> List[str]:
+    """Translate one Console request into the exact current-interpreter CLI."""
+    mode = str(payload.get("mode") or "observe")
+    if mode not in ("observe", "stress", "control", "hysteresis"):
+        raise ValueError(f"Unknown mode: {mode}")
+
+    prompt = str(payload.get("prompt") or "")
+    max_tokens_value = payload.get("max_tokens")
+    max_tokens = int(64 if max_tokens_value is None else max_tokens_value)
+    seed_value = payload.get("seed")
+    seed = int(42 if seed_value is None else seed_value)
+    model = str(payload.get("model") or "").strip()
+
+    cmd: List[str] = [sys.executable, "-m", "runtime_lab.cli.main", mode]
+    if model:
+        cmd += ["--model", model]
+    if prompt:
+        cmd += ["--prompt", prompt]
+    cmd += ["--max-tokens", str(max_tokens), "--seed", str(seed)]
+
+    probe_layers = str(payload.get("probe_layers") or "auto")
+    if mode in ("observe", "stress", "control"):
+        cmd += ["--probe-layers", probe_layers]
+
+    seeds_spec = payload.get("seeds")
+    if seeds_spec:
+        cmd += ["--seeds", str(seeds_spec)]
+
+    if payload.get("temperature") is not None:
+        cmd += ["--temperature", str(float(payload["temperature"]))]
+    if payload.get("top_p") is not None:
+        cmd += ["--top-p", str(float(payload["top_p"]))]
+    if payload.get("top_k") is not None:
+        cmd += ["--top-k", str(int(payload["top_k"]))]
+
+    def _pass(key: str, flag: str, cast=lambda x: str(x)) -> None:
+        if key in payload and payload[key] is not None:
+            cmd.extend([flag, cast(payload[key])])
+
+    if mode == "stress":
+        _pass("layer", "--layer")
+        _pass("intervention_type", "--type")
+        _pass("magnitude", "--magnitude", lambda value: str(float(value)))
+        if payload.get("absolute_magnitude"):
+            cmd.append("--absolute-magnitude")
+        _pass("start", "--start", lambda value: str(int(value)))
+        _pass("duration", "--duration", lambda value: str(int(value)))
+    elif mode == "hysteresis":
+        perturbation_mode = str(payload.get("perturbation_mode") or "prompt")
+        cmd += ["--perturbation-mode", perturbation_mode]
+        if perturbation_mode == "noise":
+            _pass("noise_layer", "--noise-layer")
+            _pass("noise_magnitude", "--noise-magnitude", lambda value: str(float(value)))
+            _pass("noise_start", "--noise-start", lambda value: str(int(value)))
+            _pass("noise_duration", "--noise-duration", lambda value: str(int(value)))
+    elif mode == "control":
+        _pass("measure_layer", "--measure-layer", lambda value: str(int(value)))
+        _pass("act_layer", "--act-layer", lambda value: str(int(value)))
+        _pass("intervention_type", "--type")
+        if payload.get("shadow"):
+            cmd.append("--shadow")
+
+    return cmd
+
+
 class JobManager:
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -288,61 +352,8 @@ class JobManager:
             raise ValueError(f"Unknown mode: {mode}")
 
         prompt = str(payload.get("prompt") or "")
-        max_tokens = int(payload.get("max_tokens") or 64)
-        seed = int(payload.get("seed") or 42)
         model = str(payload.get("model") or "").strip()
-
-        cmd: List[str] = ["python", "-m", "runtime_lab.cli.main", mode]
-        if model:
-            cmd += ["--model", model]
-        if prompt:
-            cmd += ["--prompt", prompt]
-        cmd += ["--max-tokens", str(max_tokens), "--seed", str(seed)]
-
-        probe_layers = str(payload.get("probe_layers") or "auto")
-        if mode in ("observe", "stress", "control"):
-            cmd += ["--probe-layers", probe_layers]
-
-        seeds_spec = payload.get("seeds")
-        if seeds_spec:
-            cmd += ["--seeds", str(seeds_spec)]
-
-        # Sampling — always pass through if given so sampling can be opted into.
-        if payload.get("temperature") is not None:
-            cmd += ["--temperature", str(float(payload["temperature"]))]
-        if payload.get("top_p") is not None:
-            cmd += ["--top-p", str(float(payload["top_p"]))]
-        if payload.get("top_k") is not None:
-            cmd += ["--top-k", str(int(payload["top_k"]))]
-
-        # Helper: only pass a CLI flag if the caller gave a value; otherwise let
-        # the CLI's own default (which may be a semantic string like "mid") apply.
-        def _pass(key: str, flag: str, cast=lambda x: str(x)) -> None:
-            if key in payload and payload[key] is not None:
-                cmd.extend([flag, cast(payload[key])])
-
-        if mode == "stress":
-            _pass("layer", "--layer")  # pass through as string; CLI handles semantic
-            _pass("intervention_type", "--type")
-            _pass("magnitude", "--magnitude", lambda v: str(float(v)))
-            if payload.get("absolute_magnitude"):
-                cmd.append("--absolute-magnitude")
-            _pass("start", "--start", lambda v: str(int(v)))
-            _pass("duration", "--duration", lambda v: str(int(v)))
-        elif mode == "hysteresis":
-            pm = str(payload.get("perturbation_mode") or "prompt")
-            cmd += ["--perturbation-mode", pm]
-            if pm == "noise":
-                _pass("noise_layer", "--noise-layer")  # semantic-friendly
-                _pass("noise_magnitude", "--noise-magnitude", lambda v: str(float(v)))
-                _pass("noise_start", "--noise-start", lambda v: str(int(v)))
-                _pass("noise_duration", "--noise-duration", lambda v: str(int(v)))
-        elif mode == "control":
-            _pass("measure_layer", "--measure-layer", lambda v: str(int(v)))
-            _pass("act_layer", "--act-layer", lambda v: str(int(v)))
-            _pass("intervention_type", "--type")
-            if payload.get("shadow"):
-                cmd.append("--shadow")
+        cmd = build_cli_command(payload)
 
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
@@ -822,7 +833,6 @@ class Handler(BaseHTTPRequestHandler):
                 if not rd.exists():
                     continue
                 mode = infer_mode(rd.name)
-                summary = read_json(rd / "summary.json") or {}
                 series: List[Dict[str, Any]] = []
                 events_path = rd / "events.jsonl"
                 if events_path.exists():

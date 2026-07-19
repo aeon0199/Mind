@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import random
 from dataclasses import dataclass
@@ -12,10 +11,10 @@ import numpy as np
 import torch
 
 from runtime_lab.config.schemas import HysteresisConfig
+from runtime_lab.core.backend.identity import resolved_model_identity
 from runtime_lab.core.backend.loader import load_model_with_backend
-from runtime_lab.core.io.artifacts import ensure_dir
-from runtime_lab.core.io.hashing import hash_config
 from runtime_lab.core.io.json import save_json
+from runtime_lab.core.io.run_artifacts import create_run_dir, write_config_record
 from runtime_lab.core.model.layers import resolve_transformer_layers
 from runtime_lab.core.runtime.hooks import HiddenCaptureHook
 from runtime_lab.stress.seed_cache import build_seed_cache
@@ -457,19 +456,15 @@ def run_hysteresis_experiment(
     tokenizer = backend_result.tokenizer
     model = backend_result.model
     device = backend_result.device
-    model_cfg = backend_result.config
-    model_id = config.model_key or getattr(model_cfg, "key", None) or "unknown"
-
-    base_runs = ensure_dir(runs_dir or os.environ.get("RUNS_DIR", "runs"))
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = ensure_dir(base_runs / f"hysteresis_run_{stamp}")
+    model_identity = resolved_model_identity(config.model_key, backend_result)
+    model_id = str(model_identity["model"])
 
     original_question = f"{config.original_question_label}:\n{config.prompt}"
     run_config = {
         "mode": "hysteresis",
         "prompt": config.prompt,
         "original_question": original_question,
-        "model": model_id,
+        **model_identity,
         "backend": backend_result.backend,
         "backend_meta": dict(backend_result.backend_meta),
         "max_new_tokens": int(config.max_new_tokens),
@@ -482,8 +477,6 @@ def run_hysteresis_experiment(
         "noise_duration": int(getattr(config, "noise_duration", 8)),
         "noise_seed": int(getattr(config, "noise_seed", 1234)),
     }
-    cfg_hash = hash_config(run_config)
-
     layers = resolve_transformer_layers(model)
     num_layers = len(layers)
     capture_hook = HiddenCaptureHook()
@@ -514,6 +507,13 @@ def run_hysteresis_experiment(
             prompt=original_question,
             intervention_layer=-1,
         )
+        run_config["seed_cache_fingerprint"] = seed_cache.fingerprint
+        run_config["prompt_tokens"] = int(seed_cache.seq_len)
+        run_id, run_dir = create_run_dir(
+            runs_dir or os.environ.get("RUNS_DIR", "runs"),
+            "hysteresis",
+        )
+        cfg_hash, config_path = write_config_record(run_dir, run_config)
 
         base = _generate_from_seed_cache(
             model=model,
@@ -710,7 +710,8 @@ def run_hysteresis_experiment(
     summary = {
         "config_hash": cfg_hash,
         "mode": "hysteresis",
-        "timestamp": stamp,
+        "run_id": run_id,
+        "timestamp": datetime.now().isoformat(),
         "run_dir": str(run_dir),
         "model_id": model_id,
         "backend": backend_result.backend,
@@ -770,6 +771,7 @@ def run_hysteresis_experiment(
         },
         "artifacts": {
             "run_dir": str(run_dir),
+            "config_path": str(config_path),
             "frame_base": str(Path(run_dir) / "frame_base.json"),
             "frame_perturb": str(Path(run_dir) / "frame_perturb.json"),
             "frame_reask": str(Path(run_dir) / "frame_reask.json"),

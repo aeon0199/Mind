@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import asdict
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import torch
 
 from runtime_lab.config.schemas import ControlConfig, DiagnosticsConfig
+from runtime_lab.core.backend.identity import resolved_model_identity
 from runtime_lab.core.backend.loader import load_model_with_backend
 from runtime_lab.core.diagnostics.manager import DiagnosticsManager, summarize_diagnostics_health
 from runtime_lab.core.interventions.factory import build_intervention
@@ -20,9 +20,8 @@ from runtime_lab.core.interventions.additive import (
     MagnitudeState,
 )
 from runtime_lab.core.interventions.scaling import DynamicScalingIntervention, ScaleState
-from runtime_lab.core.io.artifacts import ensure_dir
-from runtime_lab.core.io.hashing import hash_config
 from runtime_lab.core.io.json import save_json
+from runtime_lab.core.io.run_artifacts import create_run_dir, write_config_record
 from runtime_lab.core.runtime.engine import RuntimeEngine
 from runtime_lab.core.runtime.events import ControlEvent, runtime_event_to_record
 from .controller import StabilityController
@@ -73,17 +72,13 @@ def run_control_experiment(
     tokenizer = backend_result.tokenizer
     model = backend_result.model
     device = backend_result.device
-    model_cfg = backend_result.config
-    model_id = config.model_key or getattr(model_cfg, "key", None) or "unknown"
-
-    base_runs = ensure_dir(runs_dir or os.environ.get("RUNS_DIR", "runs"))
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = ensure_dir(base_runs / f"control_run_{stamp}")
+    model_identity = resolved_model_identity(config.model_key, backend_result)
+    model_id = str(model_identity["model"])
 
     run_config = {
         "mode": "control",
         "prompt": config.prompt,
-        "model": model_id,
+        **model_identity,
         "backend": backend_result.backend,
         "backend_meta": dict(backend_result.backend_meta),
         "max_new_tokens": int(config.max_new_tokens),
@@ -94,14 +89,6 @@ def run_control_experiment(
         "seed": int(config.seed) if config.seed is not None else None,
         "controller": asdict(config),
     }
-    cfg_hash = hash_config(run_config)
-
-    events_path = Path(run_dir) / "events.jsonl"
-    summary_path = Path(run_dir) / "summary.json"
-    output_path = Path(run_dir) / "output.txt"
-    config_path = Path(run_dir) / "config.json"
-
-    save_json(str(config_path), {"config_hash": cfg_hash, "config": run_config})
 
     diag_cfg = diagnostics_config or DiagnosticsConfig(
         enabled=True,
@@ -175,6 +162,22 @@ def run_control_experiment(
         top_p=float(getattr(config, "top_p", 1.0)),
         top_k=int(getattr(config, "top_k", 0)),
     )
+    run_config.update(
+        {
+            "measure_layer_resolved": int(engine.measure_resolved_layer_idx),
+            "act_layer_resolved": int(engine.act_resolved_layer_idx),
+            "probe_layers_resolved": list(dict.fromkeys(engine.probe_resolved.values())),
+            "num_layers": int(engine.num_layers),
+        }
+    )
+    run_id, run_dir = create_run_dir(
+        runs_dir or os.environ.get("RUNS_DIR", "runs"),
+        "control",
+    )
+    events_path = Path(run_dir) / "events.jsonl"
+    summary_path = Path(run_dir) / "summary.json"
+    output_path = Path(run_dir) / "output.txt"
+    cfg_hash, config_path = write_config_record(run_dir, run_config)
 
     generated_text = ""
     events_cache: list[dict[str, Any]] = []
@@ -469,6 +472,7 @@ def run_control_experiment(
     summary = {
         "config_hash": cfg_hash,
         "mode": "control",
+        "run_id": run_id,
         "run_dir": str(run_dir),
         "model_id": model_id,
         "backend": backend_result.backend,

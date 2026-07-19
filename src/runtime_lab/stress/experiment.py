@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 import torch
 
 from runtime_lab.config.schemas import DiagnosticsConfig, StressConfig
+from runtime_lab.core.backend.identity import resolved_model_identity
 from runtime_lab.core.backend.loader import load_model_with_backend
 from runtime_lab.core.diagnostics.manager import DiagnosticsManager, summarize_diagnostics_health
 from runtime_lab.core.interventions.factory import build_intervention
-from runtime_lab.core.io.artifacts import ensure_dir
-from runtime_lab.core.io.hashing import hash_config
 from runtime_lab.core.io.json import save_json
+from runtime_lab.core.io.run_artifacts import create_run_dir, write_config_record
 from runtime_lab.core.runtime.engine import RuntimeEngine
 from runtime_lab.core.sampling import logit_kl, logit_jensen_shannon, sample_token_id
 from runtime_lab.core.trajectory.comparison import TrajectoryComparison
@@ -208,14 +207,13 @@ def run_stress_experiment(
     tokenizer = backend_result.tokenizer
     model = backend_result.model
     device = backend_result.device
-    model_cfg = backend_result.config
-
-    model_id = config.model_key or getattr(model_cfg, "key", None) or "unknown"
+    model_identity = resolved_model_identity(config.model_key, backend_result)
+    model_id = str(model_identity["model"])
 
     run_config = {
         "mode": "stress",
         "prompt": config.prompt,
-        "model": model_id,
+        **model_identity,
         "backend": backend_result.backend,
         "backend_meta": dict(backend_result.backend_meta),
         "max_new_tokens": int(config.max_new_tokens),
@@ -231,12 +229,6 @@ def run_stress_experiment(
         "top_p": float(getattr(config, "top_p", 1.0)),
         "top_k": int(getattr(config, "top_k", 0)),
     }
-
-    cfg_hash = hash_config(run_config)
-
-    base_runs = ensure_dir(runs_dir or os.environ.get("RUNS_DIR", "runs"))
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = ensure_dir(base_runs / f"stress_run_{stamp}")
 
     intervention_end = int(config.intervention_start + config.intervention_duration)
 
@@ -276,6 +268,11 @@ def run_stress_experiment(
         "top_p": float(getattr(config, "top_p", 1.0)),
         "top_k": int(getattr(config, "top_k", 0)),
     }
+    run_id, run_dir = create_run_dir(
+        runs_dir or os.environ.get("RUNS_DIR", "runs"),
+        "stress",
+    )
+    cfg_hash, config_path = write_config_record(run_dir, run_config)
 
     if config.seed is not None:
         _set_deterministic_state(int(config.seed))
@@ -364,7 +361,8 @@ def run_stress_experiment(
 
     results = {
         "config_hash": cfg_hash,
-        "timestamp": stamp,
+        "run_id": run_id,
+        "timestamp": run_id,
         "mode": "stress",
         "config": run_config,
         "runtime": {
@@ -399,9 +397,11 @@ def run_stress_experiment(
         "trajectories": comparison.to_json(),
         "artifacts": {
             "run_dir": str(run_dir),
+            "config_path": str(config_path),
             "baseline_output": str(run_dir / "baseline_output.txt"),
             "intervention_output": str(run_dir / "intervention_output.txt"),
             "results_json": str(run_dir / "results.json"),
+            "summary_path": str(run_dir / "summary.json"),
         },
     }
 
@@ -424,6 +424,7 @@ def run_stress_experiment(
     summary = {
         "config_hash": cfg_hash,
         "mode": "stress",
+        "run_id": run_id,
         "run_dir": str(run_dir),
         "model_id": model_id,
         "backend": backend_result.backend,

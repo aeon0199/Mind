@@ -109,10 +109,9 @@ python -m pip install -e ".[research]"
 ```
 
 ```bash
-# NNsight backend (remote execution support)
+# NNsight backend (local execution only)
 python -m runtime_lab.cli.main stress \
   --backend nnsight \
-  --nnsight-remote \
   --prompt "Explain how airplanes fly." \
   --layer -1 \
   --type scaling \
@@ -135,6 +134,10 @@ python -m runtime_lab.cli.main control \
   --sae-feature-idx 42 \
   --sae-strength 5.0
 ```
+
+NNsight remote execution is intentionally unavailable: Observer's current
+runtime uses direct PyTorch hooks and needs a trace-based backend before a
+remote result can be represented honestly.
 
 ---
 

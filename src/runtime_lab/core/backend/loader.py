@@ -184,6 +184,11 @@ def load_model_with_backend(
     nnsight_device: Optional[str] = None,
 ) -> BackendLoadResult:
     backend = str(backend or "hf").lower().strip()
+    if nnsight_remote:
+        raise RuntimeError(
+            "NNsight remote execution is unavailable in Observer's direct-hook runtime; "
+            "a trace-based backend is required before remote execution can be supported."
+        )
 
     registry = load_model_registry(registry_path)
     config = resolve_config(model_key, registry)
@@ -235,7 +240,6 @@ def load_model_with_backend(
         config.hf_id,
         device_map=target_device,
         dispatch=True,
-        remote=bool(nnsight_remote),
     )
     tokenizer = getattr(wrapper, "tokenizer", None)
     if tokenizer is None:
@@ -258,6 +262,5 @@ def load_model_with_backend(
             "requested_dtype": policy["requested_dtype"],
             "resolved_dtype": policy["resolved_dtype"],
             "policy_notes": policy["policy_notes"],
-            "wrapper": wrapper,
         },
     )
