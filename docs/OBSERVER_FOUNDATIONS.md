@@ -74,6 +74,27 @@ These quantities must be interpreted together. Raw L2 growth is not by itself
 evidence of destructive cascade, and final normalization can remove radial
 scaling while preserving directional changes.
 
+### Causal branch continuation
+
+Basin mode extends a selected local fork without confusing selection with
+outcome:
+
+- pass one maps every independent same-context fork and advances only the clean
+  path;
+- an outcome-blind early/middle/late rule selects a bounded set of episodes;
+- pass two resets and replays the exact clean path, rejecting any context,
+  fingerprint, or decision mismatch;
+- clean and perturbed branches continue for equal lengths with the
+  intervention disabled and deterministic paired sampling RNG at every
+  position;
+- a declared deterministic prompt rubric scores both texts without receiving
+  branch identity.
+
+This answers a trajectory-level causal question: **what outcome follows from
+the selected local intervention-driven branch?** A higher rubric score is a
+task-specific operational outcome, not a universal semantic, preference, or
+safety judgment. Ties, no-flips, and exact no-effects remain part of coverage.
+
 ### Exposure and propagation
 
 A stress run can instead continue clean and perturbed branches across an
@@ -94,6 +115,9 @@ Comparisons must match the question being asked.
 - **Propagation:** aligned clean and perturbed trajectories across and after an
   intervention window, or independent same-context layer-by-layer paired
   deltas for local propagation.
+- **Basin outcome:** exact replay plus paired intervention-free continuation
+  from an outcome-blind selected local fork. Report local-flip coverage,
+  no-flips, ties, rubric class balance, and whole-prompt-held-out prediction.
 - **Matched recovery:** two branches begin from the same cache, experience
   equal exposure instructions, and then both continue for the same requested
   recovery length with no intervention. Recovery is classified only when the
@@ -148,9 +172,27 @@ Verified in code and automated tests:
 - loaded-model-aware semantic layer resolution;
 - local one-step branchpoint forks with matched contexts and paired RNG;
 - matched hidden-state exposure and recovery mechanics;
+- same-context downstream-block and final-normalization propagation capture;
+- exact clean replay and paired intervention-free branch continuation;
+- deterministic prompt-specific rubrics with branch identity hidden from the
+  scorer;
 - simple diagnostic baselines and deterministic synthetic validation.
 
-Preserved but reopened:
+Calibrated but scoped:
+
+- **F32 / Q1:** clean pre-intervention features cleared the local
+  flippability AUROC gate on two Qwen3-1.7B prompt slices at one calibrated
+  setting. Precision/recall did not become a controller-ready trigger.
+- **F33:** matched hysteresis produced valid endpoint propagation and recovery
+  measurements, with strong seed dependence.
+- **F34 / Q2:** same-context per-layer traces separated raw scale growth from
+  relative/angular disturbance. No prompt-robust bounded controller layer was
+  established.
+- **F35 / Q3:** causal branch continuations produced rubric improvements,
+  degradations, and ties, but the clean pre-flip predictor missed its
+  whole-prompt-held-out AUROC gate.
+
+Preserved historical corrections:
 
 - **F31 / Q1:** historical controller-paired AUROCs do not establish local
   flippability. After the first token difference, the active and shadow runs
@@ -163,23 +205,26 @@ Preserved but reopened:
 Not claimed:
 
 - that a diagnostic has established semantic or safety meaning;
-- that local branchpoint flippability is already predictable out of sample;
-- that matched recovery regimes have already been calibrated on the target
-  research model;
+- that the scoped Q1 predictor generalizes beyond its calibrated setting;
+- that matched recovery defines universal dynamical regimes;
+- that deterministic basin rubrics measure universal output quality;
+- that the procedural F35 slice will replicate on unseen prompts;
 - that the controller is validated or ready to resume.
 
 ## Next evidence-producing experiment
 
-After release verification, run a small calibration suite using only the new
-protocols:
+M1R, MHR, Q2, and M3R have now calibrated all four foundation comparisons on
+Qwen3-1.7B. If basin mapping continues, the next evidence-producing experiment
+is a preregistered prompt-breadth replication:
 
-1. local branchpoints at zero and nonzero magnitude across at least three seeds
-   and two prompts;
-2. matched hysteresis at zero and several nonzero magnitudes over the same
-   seeds and prompts;
-3. analysis grouped by whole run, reporting AUROC, precision, recall, direct
-   perturbation effect, propagation, persistence, and recovery validity;
-4. no controller-mode rows used as local branchpoint labels.
+1. freeze improved outcome rubrics before generating new data, especially for
+   code continuations;
+2. add independent prompts with enough improve and degrade outcomes to support
+   whole-prompt holdout;
+3. preserve identity controls, exact clean replay, outcome-blind selection,
+   ties/no-flips, and the pre-flip-only predictor boundary;
+4. test the scoped procedural pattern without treating it as a replacement for
+   the failed aggregate Q3 gate.
 
-That is the shortest honest route from a repaired instrument to new Observer
-findings.
+No controller rows should be used as causal branchpoint or basin-outcome
+labels, and no controller redesign should resume from the present evidence.

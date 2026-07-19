@@ -20,7 +20,12 @@
 10. For per-layer propagation claims, require independent matched one-step
     forks, complete downstream-block capture, and terminal-normalization
     capture. Report absolute, relative, and angular deltas together.
-11. For archived shadow/active controller comparisons, record
+11. For basin-outcome claims, require outcome-blind episode selection, exact
+    clean replay, verified context fingerprints, equal intervention-free
+    continuation, paired per-position sampling RNG, and a declared evaluator
+    that does not receive branch identity. Preserve ties and no-flips in
+    coverage, and hold out whole prompts when claiming prompt generalization.
+12. For archived shadow/active controller comparisons, record
     `intervention_applied` counts per run—a passing cell where the controller
     never fired is a measurement-layer confound.
 
@@ -70,6 +75,14 @@ Mode-specific extras:
   instruction and no intervention. Legacy `frame_base.json` /
   `frame_perturb.json` / `frame_reask.json` files are labeled endpoint
   compatibility views, not metric sources.
+- **basins**: `causal-branch-continuation-v1`. Pass one writes every
+  same-context local fork to `branchpoints.jsonl` and selects bounded
+  early/middle/late episodes without using continuation outcomes. Pass two
+  resets and exactly replays the clean path, then writes paired clean and
+  perturbed continuations to `episodes.jsonl`, `trajectories.jsonl`, and
+  per-episode text files. Require replay/context verification,
+  `continuation_intervention_disabled=true`, paired sampling, and
+  branch-blind declared rubric scoring.
 - **control**: closed-loop run. Writes `events.jsonl` per token, `summary.json`
   with `status_counts` (WARNING / CRITICAL / COOLDOWN), `avg_raw_div_mean`,
   `avg_score_mean`, and the `advisory` block. This mode is historical/downstream
@@ -101,6 +114,11 @@ Mode-specific extras:
 6. For controller-mode A/B claims, always report `intervention_applied` totals
    per cell. If the active cell barely fired (or fired more than expected) the
    measurement is suspect.
+7. For basin mapping, report total local rows, selected episodes, selection
+   coverage, sampled flips, no-flips, improve/degrade/tie counts, evaluator and
+   rubric hash, replay validity, and exact controls. Binary outcome predictors
+   must not relabel ties or no-flips; report missing-class held-out prompts
+   instead of silently dropping their coverage.
 
 ## Diagnostic Validation
 

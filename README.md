@@ -44,8 +44,12 @@ Matched hysteresis also revealed strongly seed-dependent near-zero versus
 order-one propagation. A 280-run per-layer propagation sweep then showed that
 raw L2 growth, normalized structural disturbance, and output disruption are
 different quantities: final RMSNorm erases radial final-layer scaling but not
-directional additive changes. The historical closed-loop thesis remains paused
-while the project rebuilds causal basin-outcome mapping.
+directional additive changes. A subsequent 60-run causal basin suite continued
+verified clean and perturbed branches across ten prompts. It measured real
+improvements, degradations, and ties under frozen task rubrics, but its
+clean-feature predictor reached only 0.571 mean whole-prompt-held-out AUROC,
+below the prespecified 0.70 gate. The historical closed-loop thesis remains
+paused.
 
 Start with:
 
@@ -56,6 +60,8 @@ Start with:
   target-model result.
 - `docs/Q2_PROPAGATION_CALIBRATION_2026-07-19.md` for the downstream-layer
   propagation result.
+- `docs/Q3_BASIN_MAPPING_2026-07-19.md` for the causal paired-continuation
+  outcome result and negative prediction gate.
 - `RESEARCH_CONTROLLER.md` for the archived controller evidence.
 - `docs/RESEARCH_WORKFLOW.md` for the experiment handoff discipline.
 
@@ -74,13 +80,16 @@ Its foundation has four stages:
   spectral, layer, and windowed-SVD diagnostics.
 - **Perturb** — either run a persistent clean-vs-intervention stress comparison
   or create an independent **local branchpoint** fork at each clean decision.
-  Local forks share the exact cache, consumed token, and sampling RNG.
+  Local forks share the exact cache, consumed token, and sampling RNG. Basin
+  mode can replay a selected fork and continue both branches with the
+  intervention disabled.
 - **Compare** — measure direct sensitivity, propagation, persistence, and
-  matched recovery. Recovery continues both exposed branches under identical
-  conditions with the intervention disabled.
+  matched recovery or branch-continuation outcomes. Recovery and basin
+  continuation keep paired conditions with the intervention disabled.
 - **Prove** — save the final config hash, loaded-model identity, context
   fingerprints, structured events, protocol-validity fields, and testable
-  artifacts.
+  artifacts. Basin outcomes use frozen task-specific rubrics with branch
+  identity hidden from the scorer.
 
 **Act is downstream.** The adaptive controller remains runnable for archived
 research and future experiments, but it is not treated as a validated layer of
@@ -273,6 +282,8 @@ foundation.
 - Cache fingerprints wherever a matched context is claimed
 - Independent local counterfactual forks and paired sampling RNG
 - Explicit matched-recovery validity metadata
+- Exact clean replay, outcome-blind episode selection, paired
+  intervention-free branch continuation, and declared branch-blind rubrics
 - Simple diagnostic baselines plus a deterministic synthetic validator
 - Experimental runs reported in the paper were executed on a single NVIDIA H200 GPU via RunPod
 - Reporting checklist in `REPRODUCIBILITY.md`

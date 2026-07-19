@@ -526,8 +526,12 @@
     block and final RMSNorm. It found that raw L2 amplification, normalized
     structural disturbance, and output disruption are not interchangeable.
     Final RMSNorm erases radial final-layer scaling but preserves directional
-    additive change. F34 records the scoped result; Q3's causal protocol is
-    next and controller work remains paused.
+    additive change. F34 records the scoped result. A subsequent 60-run Q3
+    suite continued verified clean and perturbed branches across ten prompts.
+    It observed improve, degrade, and tie outcomes under frozen task rubrics,
+    but a clean pre-flip predictor reached only 0.571 mean whole-prompt-held-out
+    AUROC, below the prespecified 0.70 gate. F35 records that measured negative
+    result; controller work remains paused.
   </p>
 </div>
 
@@ -1629,6 +1633,37 @@ Metrics:
     not uniformly minimize prompt-slice flips. Q2 thus has a scoped
     mechanistic answer, not a controller-ready bounded-layer result.
   </p>
+
+  <h3>F35 — Causal basin mapping measures outcomes but misses its prediction gate</h3>
+  <p>
+    M3R rebuilt the historical controller-dependent basin proposal as
+    <code>causal-branch-continuation-v1</code>. It ran 60 Qwen3-1.7B cells:
+    ten prompts spanning factual, procedural, creative, reasoning, and code;
+    three seeds; and layer-27 relative additive magnitudes 0 and 0.30. Pass one
+    mapped 2,820 independent same-context local forks and selected at most one
+    early, middle, and late episode without reading continuation outcomes. Pass
+    two reset and exactly replayed the clean path, then continued clean and
+    perturbed branches for 48 tokens with the intervention disabled and paired
+    sampling randomness.
+  </p>
+  <p>
+    All 60 run hashes validated, and all 90 selected identity-control episodes
+    were exact ties. The active runs contained 69 selected sampled-token flips
+    and 21 no-flips. Under deterministic prompt-specific rubrics whose scorer
+    did not receive branch identity, sampled flips produced 31 improvements,
+    11 degradations, and 27 ties. These labels mean higher or lower declared
+    task-rubric score, not universal semantic quality.
+  </p>
+  <p>
+    A predictor restricted to clean pre-flip/context features used 42 non-tie
+    sampled-flip rows and held out each complete prompt. Five prompts contained
+    both labels; mean held-out AUROC was 0.571 (range 0.000–0.889), below the
+    prespecified 0.70 gate. The procedural slice produced 12 improve, 0
+    degrade, and 6 tie outcomes across two prompts and three seeds, but both
+    procedural holdouts lacked negative examples. That slice is a
+    preregistered replication target, not a replacement success criterion.
+    Q3 is therefore a measured negative and the controller remains paused.
+  </p>
 </section>
 
 <section>
@@ -1664,7 +1699,7 @@ Metrics:
           <td><strong>Q3</strong></td>
           <td>Basin structure: when does a flip improve vs. degrade output?</td>
           <td>Pre-flip generation feature predicts improve-vs-degrade with AUROC ≥ 0.7 on Qwen3-1.7B.</td>
-          <td>Protocol rebuild next</td>
+          <td><strong>Measured negative: mean prompt-held-out AUROC 0.571 (F35)</strong></td>
         </tr>
       </tbody>
     </table>
@@ -1750,8 +1785,10 @@ Metrics:
     <strong>Target-model calibration is narrow.</strong> F32/F33 cover
     Qwen3-1.7B, three seeds, two prompts, one branchpoint layer, one hysteresis
     layer, and the reported magnitudes. F34 adds five seeds, four injection
-    depths, and two intervention families, but still only two prompts and one
-    model. Cross-model and broad prompt-class claims remain open.
+    depths, and two intervention families, but still only two prompts. F35
+    adds ten prompts across five declared classes, but still only three seeds,
+    one model, one active magnitude, and at most three selected episodes per
+    run. Cross-model claims remain open.
   </p>
   <p>
     <strong>Prompt-class diversity.</strong> The repaired F32 suite reran one
@@ -1768,11 +1805,13 @@ Metrics:
     sampled token is unchanged.
   </p>
   <p>
-    <strong>Basin-outcome evaluation is not yet rebuilt.</strong> F32 predicts
-    local flippability and F34 maps local propagation; neither says whether a
-    continued perturbed branch is semantically better. Historical M3.1 depended
-    on controller shadow/active runs. The replacement must use verified
-    branchpoint continuations and declared prompt-specific outcome evaluators.
+    <strong>Basin-outcome labels are operational and uneven.</strong> F35
+    rebuilt the causal continuation protocol and used frozen prompt-specific
+    evaluators, but those scores are not universal semantic-quality judgments.
+    Only 42 sampled-flip episodes had a non-tie binary outcome; four prompt
+    holdouts lacked one class, and the palindrome code rubric tied every
+    selected episode. Broader prompts and improved rubric resolution must be
+    frozen before replication.
   </p>
   <p>
     <strong>Asserted controller weights.</strong> The 70/15/10/5 weighting in the v1
@@ -1857,11 +1896,11 @@ Metrics:
   </p>
 
   <p>
-    <strong>Foundation-first work queued.</strong> M1R, MHR, and Q2 propagation
-    calibration are complete. The next task is M3R: a controller-independent
-    branch-continuation protocol with explicit outcome evaluation across five
-    prompt classes. No controller rows will be used as causal branchpoint or
-    basin-outcome labels.
+    <strong>Foundation-first calibration complete.</strong> M1R, MHR, Q2
+    propagation, and M3R causal basin mapping are complete on Qwen3-1.7B. The
+    next honest basin task, if pursued, is a preregistered prompt-breadth and
+    evaluator-resolution replication—not controller redesign. No controller
+    rows are accepted as causal branchpoint or basin-outcome labels.
   </p>
 </section>
 
@@ -1894,10 +1933,13 @@ Metrics:
     sharper open question. The active runtime now supports canonical events,
     authoritative provenance, independent local branchpoint forks, matched
     exposure/recovery traces, direct diagnostic baselines, and deterministic
-    validation. The historical AUROC predictor is not retained as a positive
-    finding because its target labels were cascading. The mapping program in
-    §12 organizes the calibration needed to determine whether a genuine local
-    predictor exists, with explicit criteria for reopening controller work.
+    validation, per-layer propagation capture, exact clean replay, and paired
+    branch continuation with declared outcome rubrics. The historical AUROC
+    predictor is not retained as a positive finding because its target labels
+    were cascading. A repaired local predictor did clear a scoped Q1 AUROC
+    gate, while the Q3 better-versus-worse predictor missed its prompt-held-out
+    gate. The mapping program in §12 records both results with explicit
+    criteria for reopening controller work.
   </p>
 
   <p>
@@ -1919,7 +1961,7 @@ Metrics:
     claim — rather than continuing to tune it — was set by the author and
     implemented against artifacts that were jointly reviewed before being treated
     as evidence. All code, runs, and claims were human-reviewed against generated
-    artifacts. The complete F-numbered evidence chain (F1–F31) is preserved in
+    artifacts. The complete F-numbered evidence chain (F1–F35) is preserved in
     <code>RESEARCH_CONTROLLER.md</code>, <code>RESEARCH.md</code>, and
     <code>docs/OBSERVER_FOUNDATIONS.md</code> in the
     repository, with full per-experiment run identifiers so any claim in this paper

@@ -14,8 +14,10 @@ def test_research_preserves_f31_and_records_scoped_q1_recalibration():
     assert "F31 — REOPENED" in text
     assert "F32 — RECALIBRATED" in text
     assert "F34 — PER-LAYER PROPAGATION CALIBRATED" in text
+    assert "F35 — CAUSAL BASIN MAPPING CALIBRATED" in text
     assert "Q1 status: scoped positive" in text
     assert "Q2 status: scoped mechanistic answer" in text
+    assert "Q3 status: measured negative" in text
     assert "q1 is closed" not in text.lower()
     assert "historical controller-paired AUROCs" in text
 
@@ -30,6 +32,7 @@ def test_foundation_contract_defines_causal_event_timeline():
     assert "initial intervention distance" in text
     assert "active-window peak" in text
     assert "Same-context per-layer propagation" in text
+    assert "Causal branch continuation" in text
     assert "Act" in text
 
 
@@ -55,6 +58,7 @@ def test_archived_claims_are_preserved_with_corrections():
     assert "Foundation rebuild status" in paper
     assert "F32 — RECALIBRATED" in paper
     assert "F34 — Per-layer propagation" in paper
+    assert "F35 — Causal basin mapping" in paper
 
 
 def test_repository_calibration_report_states_scope_and_controller_boundary():
@@ -74,6 +78,19 @@ def test_q2_report_records_validated_scope_and_normalization_result():
     assert "Layer 13" in text
     assert "7.54e-8" in text
     assert "Controller remains paused" in text
+
+
+def test_q3_report_records_negative_gate_without_erasing_scoped_signal():
+    text = _read("docs/Q3_BASIN_MAPPING_2026-07-19.md")
+
+    assert "60/60" in text
+    assert "2,820" in text
+    assert "31 / 11 / 27" in text
+    assert "0.571" in text
+    assert "12 improve, 0 degrade, and 6 ties" in text
+    assert "Stop condition: **NOT MET**" in text
+    assert "Controller remains paused" in text
+    assert "not a universal semantic-quality judgment" in text
 
 
 def test_console_capabilities_describe_active_protocols():

@@ -58,20 +58,56 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
 - **Foundation contract**: [docs/OBSERVER_FOUNDATIONS.md](docs/OBSERVER_FOUNDATIONS.md).
   Active work follows Observe → Perturb → Compare → Prove. Act is downstream.
 - **Program structure**: three mapping questions, Q1–Q3 in §3. **Q1 status: scoped positive**;
-  **Q2 status: scoped mechanistic answer**; Q3 is next after its causal
-  protocol is rebuilt.
+  **Q2 status: scoped mechanistic answer**; **Q3 status: measured negative**
+  against its prespecified prompt-held-out prediction gate.
 - **Controller status**: **paused**, not dead. §4 defines the evidence that would bring controller research back to active status.
 - **Instrument status**: foundation mechanics, local branchpoints, matched
-  recovery, and same-context per-layer propagation are implemented and
-  calibrated on Qwen3-1.7B. The completed suites contain 322 target-model runs
-  (42 M1R/MHR + 280 Q2).
-- **Next recommended action**: replace historical controller-dependent M3.1
-  with a causal branch-continuation and explicit outcome-evaluation protocol
-  before running Q3.
+  recovery, same-context per-layer propagation, causal paired branch
+  continuation, and branch-blind declared outcome evaluation are implemented
+  and calibrated on Qwen3-1.7B. The completed suites contain 382 target-model
+  runs (42 M1R/MHR + 280 Q2 + 60 M3R).
+- **Next recommended action**: keep the controller paused. If basin work
+  continues, preregister a broader prompt replication with improved frozen
+  rubric resolution—especially code—and enough negative procedural examples
+  to test the scoped F35 pattern without moving the Q3 goalposts.
 
 ---
 
 ## 2a. Mapping-program findings
+
+- **F35 — CAUSAL BASIN MAPPING CALIBRATED** — **Intervention-driven token
+  flips can improve, degrade, or leave a declared task score unchanged, but
+  the tested clean pre-flip features do not predict that outcome robustly
+  across unseen prompts.** M3R ran 60 Qwen3-1.7B cells: 10 prompts spanning
+  factual, procedural, creative, reasoning, and code; 3 seeds; and relative
+  additive magnitudes {0, 0.30} at layer 27.
+  - The two-pass protocol first mapped 2,820 independent same-context local
+    forks, selected at most one early/middle/late episode without reading the
+    outcome, then reset and replayed the exact clean path before continuing
+    clean and perturbed branches for 48 tokens with no further intervention.
+  - All 60 run hashes validated. All 30 identity-control runs were exact:
+    90/90 selected control episodes had identical tokens and tied rubric
+    scores.
+  - The 30 active runs contributed 90 selected episodes: 69 sampled-token
+    flips and 21 no-flips. Sampled flips produced 31 improve, 11 degrade, and
+    27 tie outcomes under the declared deterministic prompt rubrics.
+  - Ties and no-flips stayed in coverage. The binary predictor used only 42
+    non-tie sampled-flip rows (31 improve / 11 degrade), clean pre-flip/context
+    features, and prompt class; each test fold held out a complete prompt.
+  - Five prompts had both labels. Mean held-out AUROC was **0.571** (range
+    0.000–0.889), below the prespecified 0.70 stop condition. Near-perfect
+    training AUROC with unstable holdout results indicates overfit.
+  - The procedural slice produced 12 improve, 0 degrade, and 6 ties across two
+    prompts and three seeds. This is a scoped replication target, not a
+    controller gate: both procedural prompt folds lacked the negative class.
+  - **Verdict:** Q3's measurement rebuild is complete, but its predictive stop
+    condition is not met. “Improve” means higher score under a predeclared
+    deterministic prompt rubric, not universal semantic quality. The
+    controller-return criterion is not met.
+  - Evidence: `docs/Q3_BASIN_MAPPING_2026-07-19.md`.
+  - Confidence: **high** in protocol validity, replay, controls, and recorded
+    rubric outcomes; **low-medium** in prompt-class interpretation because the
+    eligible binary sample is small and class balance is uneven.
 
 - **F34 — PER-LAYER PROPAGATION CALIBRATED** — **Raw L2 amplification is not
   a sufficient definition of destructive cascade.** Q2 ran 280
@@ -276,11 +312,12 @@ landed.
 - If improvement predictors exist, the controller gains a meaningful trigger: "act only when expected-improvement > threshold."
 - Either way: a complete interpretability story about perturbation-induced basin-hopping.
 
-**Current status**: **protocol rebuild next.** Historical F29 is a useful
-controller-era observation, but M3.1's shadow/active controller design cannot
-causally label a branchpoint outcome. M3R will use verified local forks,
-paired branch continuation, declared outcome evaluators, five prompt classes,
-and prompt-held-out analysis within Qwen3-1.7B.
+**Current status**: **measured negative after M3R/F35.** The causal protocol
+ran verified local forks, exact clean replay, paired intervention-free branch
+continuations, declared branch-blind outcome evaluators, five prompt classes,
+and whole-prompt holdouts. Mean held-out AUROC was 0.571, below 0.70. The
+procedural slice is a scoped secondary hypothesis, not permission to reopen the
+controller.
 
 ---
 
@@ -300,10 +337,11 @@ If any two land, a controller redesign experiment is warranted. If none land dur
 
 ## 5. Mapping backlog
 
-Order: M1R, MHR, and M2R are complete. Rebuild Q3's causal basin-outcome
-protocol next. Do not return to controller work: the controller-specific
-precision, prompt-robust bounded-layer, and expected-improvement criteria have
-not landed.
+Order: M1R, MHR, M2R, and M3R are complete. The repaired foundation now maps
+local sensitivity, matched persistence/recovery, downstream propagation, and
+paired basin outcomes. Do not return to controller work: the
+controller-specific precision, prompt-robust bounded-layer, and
+expected-improvement criteria have not landed.
 
 ### [x] M1R — Recalibrate local branchpoint flippability
 
@@ -405,7 +443,7 @@ not landed.
 - **Outcome**: complete 2026-07-19. See F34 and
   `docs/Q2_PROPAGATION_CALIBRATION_2026-07-19.md`.
 
-### [ ] M3R — Causal prompt-class basin mapping on Qwen3-1.7B
+### [x] M3R — Causal prompt-class basin mapping on Qwen3-1.7B
 - **Question**: When an independent branchpoint fork changes a decision and
   both branches are then continued, which pre-flip/context features predict a
   better versus worse outcome?
@@ -422,7 +460,13 @@ not landed.
 - **Stop condition**: a pre-flip feature or declared prompt-class feature
   predicts improve versus degrade with held-out AUROC ≥0.70. Report coverage,
   ties/no-effect, class balance, and prompt-held-out results.
-- **Outcome**: _(pending protocol implementation and evaluator validation)_
+- **Outcome**: complete 2026-07-19. All 60 runs and 30 identity controls
+  validated. Among 69 selected sampled-token flips, declared rubric outcomes
+  were 31 improve / 11 degrade / 27 tie. The clean pre-flip prompt-held-out
+  predictor reached mean AUROC 0.571 across five valid splits, below 0.70.
+  Procedural prompts produced a scoped 12 improve / 0 degrade / 6 tie pattern
+  that requires preregistered replication. See F35 and
+  `docs/Q3_BASIN_MAPPING_2026-07-19.md`.
 
 ---
 
@@ -457,6 +501,13 @@ not landed.
   Layer 13 is the lowest aggregate-KL candidate, not a controller-ready answer.
   Q3's historical controller-dependent task was replaced with M3R, a causal
   branch-continuation protocol rebuild.
+- **2026-07-19 · Q3 causal basin mapping calibrated; F35.** Completed and
+  independently revalidated 60 Qwen3-1.7B runs across ten prompts, five
+  classes, three seeds, and exact zero controls. Sampled-token flips produced
+  improvement, degradation, and ties under frozen branch-blind rubrics, but the
+  clean pre-flip predictor reached only 0.571 mean prompt-held-out AUROC. The
+  prespecified stop condition did not pass. Procedural outcomes are a scoped
+  replication target; controller work remains paused.
 
 _(For sessions covering the controller arc 2026-02 through 2026-04-19, see [RESEARCH_CONTROLLER.md](RESEARCH_CONTROLLER.md) §5.)_
 
