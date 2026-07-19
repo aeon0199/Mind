@@ -531,7 +531,12 @@
     It observed improve, degrade, and tie outcomes under frozen task rubrics,
     but a clean pre-flip predictor reached only 0.571 mean whole-prompt-held-out
     AUROC, below the prespecified 0.70 gate. F35 records that measured negative
-    result; controller work remains paused.
+    result. A preregistered 90-run M3R-2 replication then used 15 entirely new
+    prompts, higher-resolution frozen rubrics, and a compact regularized
+    predictor. It reached 0.596 mean AUROC across 13 valid prompt holdouts,
+    still below 0.70, and the earlier procedural direction did not replicate.
+    F36 records the strengthened negative result; controller work remains
+    paused.
   </p>
 </div>
 
@@ -1661,8 +1666,38 @@ Metrics:
     prespecified 0.70 gate. The procedural slice produced 12 improve, 0
     degrade, and 6 tie outcomes across two prompts and three seeds, but both
     procedural holdouts lacked negative examples. That slice is a
-    preregistered replication target, not a replacement success criterion.
-    Q3 is therefore a measured negative and the controller remains paused.
+    replication target, not a replacement success criterion; F36 later tested
+    it on fresh prompts and it did not replicate. Q3 is therefore a measured
+    negative and the controller remains paused.
+  </p>
+
+  <h3>F36 — M3R-2 prompt-breadth replication confirms the negative Q3 gate</h3>
+  <p>
+    M3R-2 froze its complete design before seeing replication data: 15 prompts
+    disjoint from M3R, three seeds, exact magnitude-zero controls, magnitude
+    0.30 at layer 27, 64 mapped tokens, 96 intervention-free continuation
+    tokens, and at most five outcome-blind episodes. The predictor was limited
+    to 23 declared clean pre-flip/context fields plus prompt class, with L2
+    regularization 0.05, whole-prompt holdout, a minimum of five valid splits,
+    and the unchanged 0.70 AUROC gate. Code outputs were parsed statically and
+    never executed.
+  </p>
+  <p>
+    All 90 run hashes and all 45 identity controls validated. The protocol
+    mapped 5,670 local branchpoints and retained 217 active episodes: 195
+    sampled-token flips and 22 no-flips. Sampled flips produced 67 improve, 49
+    degrade, and 79 tie outcomes under the task-specific rubrics. There were
+    116 eligible binary rows and 13 valid held-out prompts; mean held-out AUROC
+    was 0.596 (range 0.000–1.000), below 0.70. Two prompts lacking degradation
+    rows remained visible as invalid splits.
+  </p>
+  <p>
+    The original M3R procedural slice was 12 improve, 0 degrade, and 6 tie.
+    Three fresh procedural prompts produced 16 improve, 19 degrade, and 9 tie:
+    the procedural pattern did not replicate. M3R-2 therefore strengthens the
+    measured-negative Q3 conclusion without changing the goalpost. These labels
+    remain operational rubric outcomes, not universal semantic quality.
+    Controller work remains paused.
   </p>
 </section>
 
@@ -1699,7 +1734,7 @@ Metrics:
           <td><strong>Q3</strong></td>
           <td>Basin structure: when does a flip improve vs. degrade output?</td>
           <td>Pre-flip generation feature predicts improve-vs-degrade with AUROC ≥ 0.7 on Qwen3-1.7B.</td>
-          <td><strong>Measured negative: mean prompt-held-out AUROC 0.571 (F35)</strong></td>
+          <td><strong>Replicated negative: M3R-2 mean prompt-held-out AUROC 0.596 (F36)</strong></td>
         </tr>
       </tbody>
     </table>
@@ -1788,7 +1823,9 @@ Metrics:
     depths, and two intervention families, but still only two prompts. F35
     adds ten prompts across five declared classes, but still only three seeds,
     one model, one active magnitude, and at most three selected episodes per
-    run. Cross-model claims remain open.
+    run. F36 adds 15 entirely new prompts and at most five selected episodes,
+    but remains one model, one active magnitude, and three seeds. Cross-model
+    claims remain open.
   </p>
   <p>
     <strong>Prompt-class diversity.</strong> The repaired F32 suite reran one
@@ -1810,8 +1847,10 @@ Metrics:
     evaluators, but those scores are not universal semantic-quality judgments.
     Only 42 sampled-flip episodes had a non-tie binary outcome; four prompt
     holdouts lacked one class, and the palindrome code rubric tied every
-    selected episode. Broader prompts and improved rubric resolution must be
-    frozen before replication.
+    selected episode. F36's frozen v2 rubrics increased this to 116 binary rows
+    and 13 valid prompts, yet mean holdout AUROC remained 0.596. Its static code
+    contract can parse an extracted function without executing it, but does not
+    certify runtime correctness or general code quality.
   </p>
   <p>
     <strong>Asserted controller weights.</strong> The 70/15/10/5 weighting in the v1
@@ -1896,11 +1935,14 @@ Metrics:
   </p>
 
   <p>
-    <strong>Foundation-first calibration complete.</strong> M1R, MHR, Q2
-    propagation, and M3R causal basin mapping are complete on Qwen3-1.7B. The
-    next honest basin task, if pursued, is a preregistered prompt-breadth and
-    evaluator-resolution replication—not controller redesign. No controller
-    rows are accepted as causal branchpoint or basin-outcome labels.
+    <strong>Foundation-first calibration and Q3 replication complete.</strong>
+    M1R, MHR, Q2 propagation, M3R causal basin mapping, and M3R-2
+    prompt-breadth replication are complete on Qwen3-1.7B. The frozen
+    pre-flip predictor missed its Q3 gate twice, and the original procedural
+    direction did not replicate. Any further basin experiment should begin
+    with a new preregistered mechanistic question—not post-hoc feature tuning
+    or controller redesign. No controller rows are accepted as causal
+    branchpoint or basin-outcome labels.
   </p>
 </section>
 
@@ -1938,8 +1980,9 @@ Metrics:
     predictor is not retained as a positive finding because its target labels
     were cascading. A repaired local predictor did clear a scoped Q1 AUROC
     gate, while the Q3 better-versus-worse predictor missed its prompt-held-out
-    gate. The mapping program in §12 records both results with explicit
-    criteria for reopening controller work.
+    gate in M3R and again in the larger M3R-2 replication. The mapping program
+    in §12 records these results with explicit criteria for reopening
+    controller work.
   </p>
 
   <p>
@@ -1961,7 +2004,7 @@ Metrics:
     claim — rather than continuing to tune it — was set by the author and
     implemented against artifacts that were jointly reviewed before being treated
     as evidence. All code, runs, and claims were human-reviewed against generated
-    artifacts. The complete F-numbered evidence chain (F1–F35) is preserved in
+    artifacts. The complete F-numbered evidence chain (F1–F36) is preserved in
     <code>RESEARCH_CONTROLLER.md</code>, <code>RESEARCH.md</code>, and
     <code>docs/OBSERVER_FOUNDATIONS.md</code> in the
     repository, with full per-experiment run identifiers so any claim in this paper

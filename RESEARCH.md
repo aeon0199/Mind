@@ -59,21 +59,51 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
   Active work follows Observe → Perturb → Compare → Prove. Act is downstream.
 - **Program structure**: three mapping questions, Q1–Q3 in §3. **Q1 status: scoped positive**;
   **Q2 status: scoped mechanistic answer**; **Q3 status: measured negative**
-  against its prespecified prompt-held-out prediction gate.
+  and independently replicated against its prespecified prompt-held-out
+  prediction gate.
 - **Controller status**: **paused**, not dead. §4 defines the evidence that would bring controller research back to active status.
 - **Instrument status**: foundation mechanics, local branchpoints, matched
   recovery, same-context per-layer propagation, causal paired branch
   continuation, and branch-blind declared outcome evaluation are implemented
-  and calibrated on Qwen3-1.7B. The completed suites contain 382 target-model
-  runs (42 M1R/MHR + 280 Q2 + 60 M3R).
-- **Next recommended action**: keep the controller paused. If basin work
-  continues, preregister a broader prompt replication with improved frozen
-  rubric resolution—especially code—and enough negative procedural examples
-  to test the scoped F35 pattern without moving the Q3 goalposts.
+  and calibrated on Qwen3-1.7B. The completed suites contain 472 target-model
+  runs (42 M1R/MHR + 280 Q2 + 60 M3R + 90 M3R-2).
+- **Next recommended action**: keep the controller paused. M3R-2 completed the
+  preregistered Q3 replication, confirmed the negative prediction gate, and
+  retired the original procedural directional hypothesis. Do not tune the
+  frozen predictor after seeing this result. Any further basin work should
+  begin from a new, explicitly preregistered mechanistic question.
 
 ---
 
 ## 2a. Mapping-program findings
+
+- **F36 — M3R-2 PROMPT-BREADTH REPLICATION** — **A larger fresh-prompt
+  replication confirmed Observer's causal basin measurement and confirmed the
+  negative Q3 prediction gate.** M3R-2 ran 90 Qwen3-1.7B cells across 15 new
+  prompts, five classes, three seeds, and relative additive magnitudes
+  {0, 0.30} at layer 27.
+  - The registry, v2 rubrics, 23-field clean pre-flip predictor, L2
+    regularization 0.05, whole-prompt split rule, five-split minimum, and AUROC
+    threshold 0.70 were frozen before any replication output was generated.
+  - All 90 hashes and run directories validated. All 45 identity controls
+    were exact. The protocol mapped 5,670 independent local rows and retained
+    217 active episodes: 195 sampled-token flips and 22 no-flips.
+  - Sampled flips produced 67 improve, 49 degrade, and 79 tie outcomes. Across
+    all active episodes the counts were 67 / 49 / 101. Improve/degrade means
+    higher/lower frozen task-rubric score, not universal semantic quality.
+  - The compact predictor had 116 eligible rows and 13 valid whole-prompt
+    holdouts. Mean held-out AUROC was **0.596** (range 0.000–1.000), below
+    0.70. Two prompts lacking the negative class were reported as invalid.
+  - The original procedural slice did not replicate: three fresh procedural
+    prompts produced 16 improve, 19 degrade, and 9 tie outcomes, versus M3R's
+    12 / 0 / 6.
+  - **Verdict:** M3R-2 confirmed the negative Q3 gate under a broader,
+    higher-resolution preregistered design. The controller-return criterion is
+    not met, and the controller remains paused.
+  - Evidence: `docs/Q3_M3R2_REPLICATION_2026-07-19.md`.
+  - Confidence: **high** in causal mechanics, replay, controls, artifacts, and
+    the negative result for this frozen design; **low** that a universal
+    prompt-class direction exists.
 
 - **F35 — CAUSAL BASIN MAPPING CALIBRATED** — **Intervention-driven token
   flips can improve, degrade, or leave a declared task score unchanged, but
@@ -312,11 +342,12 @@ landed.
 - If improvement predictors exist, the controller gains a meaningful trigger: "act only when expected-improvement > threshold."
 - Either way: a complete interpretability story about perturbation-induced basin-hopping.
 
-**Current status**: **measured negative after M3R/F35.** The causal protocol
-ran verified local forks, exact clean replay, paired intervention-free branch
-continuations, declared branch-blind outcome evaluators, five prompt classes,
-and whole-prompt holdouts. Mean held-out AUROC was 0.571, below 0.70. The
-procedural slice is a scoped secondary hypothesis, not permission to reopen the
+**Current status**: **measured negative after M3R/F35 and independently
+replicated by M3R-2/F36.** The fresh 15-prompt replication retained the same
+causal protocol while freezing higher-resolution rubrics, a compact predictor,
+and stronger minimum-split requirement before data generation. Mean held-out
+AUROC was 0.596 across 13 valid prompts, below 0.70. The earlier procedural
+directional pattern did not replicate. Q3 does not justify reopening the
 controller.
 
 ---
@@ -337,9 +368,9 @@ If any two land, a controller redesign experiment is warranted. If none land dur
 
 ## 5. Mapping backlog
 
-Order: M1R, MHR, M2R, and M3R are complete. The repaired foundation now maps
-local sensitivity, matched persistence/recovery, downstream propagation, and
-paired basin outcomes. Do not return to controller work: the
+Order: M1R, MHR, M2R, M3R, and M3R-2 are complete. The repaired foundation now
+maps local sensitivity, matched persistence/recovery, downstream propagation,
+and paired basin outcomes. Do not return to controller work: the
 controller-specific precision, prompt-robust bounded-layer, and
 expected-improvement criteria have not landed.
 
@@ -465,8 +496,28 @@ expected-improvement criteria have not landed.
   were 31 improve / 11 degrade / 27 tie. The clean pre-flip prompt-held-out
   predictor reached mean AUROC 0.571 across five valid splits, below 0.70.
   Procedural prompts produced a scoped 12 improve / 0 degrade / 6 tie pattern
-  that requires preregistered replication. See F35 and
-  `docs/Q3_BASIN_MAPPING_2026-07-19.md`.
+  that was subsequently tested and did not replicate in M3R-2/F36. See F35,
+  F36, `docs/Q3_BASIN_MAPPING_2026-07-19.md`, and
+  `docs/Q3_M3R2_REPLICATION_2026-07-19.md`.
+
+### [x] M3R-2 — Fresh-prompt causal basin replication
+
+- **Question**: Does M3R's outcome-prediction result or its scoped procedural
+  direction replicate on entirely new prompts under higher-resolution frozen
+  rubrics and a compact preregistered predictor?
+- **Design**: 15 disjoint prompts, three per class; 3 seeds; magnitudes
+  {0, 0.30}; layer 27; 64 mapped tokens; 96 continuation tokens; at most five
+  outcome-blind episodes; exact controls/replay; 23 frozen predictor fields;
+  L2 0.05; whole-prompt holdout.
+- **Stop condition**: mean held-out AUROC at least 0.70 across at least five
+  valid prompt splits. Preserve invalid splits, ties, no-flips, and exact
+  controls.
+- **Outcome**: complete 2026-07-19. All 90 runs and 45 controls validated.
+  Sampled-token flips produced 67 improve / 49 degrade / 79 tie outcomes.
+  Thirteen valid prompt holdouts reached mean AUROC 0.596, below 0.70. The
+  procedural slice produced 16 improve / 19 degrade / 9 tie, so the M3R
+  directional pattern did not replicate. See F36 and
+  `docs/Q3_M3R2_REPLICATION_2026-07-19.md`.
 
 ---
 
@@ -508,6 +559,13 @@ expected-improvement criteria have not landed.
   clean pre-flip predictor reached only 0.571 mean prompt-held-out AUROC. The
   prespecified stop condition did not pass. Procedural outcomes are a scoped
   replication target; controller work remains paused.
+- **2026-07-19 · M3R-2 prompt-breadth replication; F36.** Froze 15 new
+  prompts, higher-resolution v2 rubrics, a 23-field predictor, L2 0.05, and
+  the original 0.70 gate before running 90 Qwen3-1.7B cells. All controls and
+  artifacts validated. Mean prompt-held-out AUROC was 0.596 across 13 valid
+  prompts, still below threshold, and the procedural 12 / 0 / 6 direction
+  became 16 / 19 / 9 on fresh prompts. The negative Q3 result is replicated;
+  controller work remains paused.
 
 _(For sessions covering the controller arc 2026-02 through 2026-04-19, see [RESEARCH_CONTROLLER.md](RESEARCH_CONTROLLER.md) §5.)_
 

@@ -48,8 +48,12 @@ directional additive changes. A subsequent 60-run causal basin suite continued
 verified clean and perturbed branches across ten prompts. It measured real
 improvements, degradations, and ties under frozen task rubrics, but its
 clean-feature predictor reached only 0.571 mean whole-prompt-held-out AUROC,
-below the prespecified 0.70 gate. The historical closed-loop thesis remains
-paused.
+below the prespecified 0.70 gate. A preregistered 90-run M3R-2 replication
+then tested 15 entirely new prompts with higher-resolution frozen rubrics and
+a compact predictor. It validated all 45 controls and reached 0.596 mean AUROC
+across 13 valid held-out prompts—still below 0.70. The earlier procedural
+improvement pattern also failed to replicate. The historical closed-loop
+thesis remains paused.
 
 Start with:
 
@@ -62,6 +66,8 @@ Start with:
   propagation result.
 - `docs/Q3_BASIN_MAPPING_2026-07-19.md` for the causal paired-continuation
   outcome result and negative prediction gate.
+- `docs/Q3_M3R2_REPLICATION_2026-07-19.md` for the fresh-prompt replication,
+  stronger negative Q3 result, and procedural non-replication.
 - `RESEARCH_CONTROLLER.md` for the archived controller evidence.
 - `docs/RESEARCH_WORKFLOW.md` for the experiment handoff discipline.
 

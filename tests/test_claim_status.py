@@ -93,6 +93,41 @@ def test_q3_report_records_negative_gate_without_erasing_scoped_signal():
     assert "not a universal semantic-quality judgment" in text
 
 
+def test_m3r2_report_locks_the_negative_replication_and_controller_boundary():
+    text = _read("docs/Q3_M3R2_REPLICATION_2026-07-19.md")
+
+    assert "90/90" in text
+    assert "5,670" in text
+    assert "45/45" in text
+    assert "217" in text
+    assert "195" in text
+    assert "22" in text
+    assert "67 / 49 / 79" in text
+    assert "13 valid" in text
+    assert "2 invalid" in text
+    assert "0.596" in text
+    assert "below threshold" in text
+    assert "16 improve, 19 degrade, and 9 ties" in text
+    assert "procedural pattern did not replicate" in text
+    assert "not a universal semantic-quality judgment" in text
+    assert "Controller remains paused" in text
+
+
+def test_public_claim_surfaces_record_m3r2_without_moving_the_gate():
+    research = _read("RESEARCH.md")
+    readme = _read("README.md")
+    paper = _read("docs/observer_paper.html")
+
+    assert "F36 — M3R-2 PROMPT-BREADTH REPLICATION" in research
+    assert "M3R-2 confirmed the negative Q3 gate" in research
+    assert "90-run M3R-2 replication" in readme
+    assert "docs/Q3_M3R2_REPLICATION_2026-07-19.md" in readme
+    assert "F36 — M3R-2 prompt-breadth replication" in paper
+    assert "procedural pattern did not replicate" in paper
+    assert "0.596" in readme
+    assert "0.596" in paper
+
+
 def test_console_capabilities_describe_active_protocols():
     text = _read("scripts/observer_console.py")
 

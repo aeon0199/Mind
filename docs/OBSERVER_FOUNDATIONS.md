@@ -191,6 +191,10 @@ Calibrated but scoped:
 - **F35 / Q3:** causal branch continuations produced rubric improvements,
   degradations, and ties, but the clean pre-flip predictor missed its
   whole-prompt-held-out AUROC gate.
+- **F36 / Q3 replication:** 15 fresh prompts, higher-resolution frozen
+  rubrics, and a compact predictor produced 13 valid holdouts but only 0.596
+  mean AUROC versus the unchanged 0.70 gate. The earlier procedural direction
+  did not replicate.
 
 Preserved historical corrections:
 
@@ -208,32 +212,27 @@ Not claimed:
 - that the scoped Q1 predictor generalizes beyond its calibrated setting;
 - that matched recovery defines universal dynamical regimes;
 - that deterministic basin rubrics measure universal output quality;
-- that the procedural F35 slice will replicate on unseen prompts;
+- that any observed prompt-class outcome direction is universal;
 - that the controller is validated or ready to resume.
 
 ## Next evidence-producing experiment
 
-M1R, MHR, Q2, and M3R have now calibrated all four foundation comparisons on
-Qwen3-1.7B. If basin mapping continues, the next evidence-producing experiment
-is a preregistered prompt-breadth replication:
-
-1. freeze improved outcome rubrics before generating new data, especially for
-   code continuations;
-2. add independent prompts with enough improve and degrade outcomes to support
-   whole-prompt holdout;
-3. preserve identity controls, exact clean replay, outcome-blind selection,
-   ties/no-flips, and the pre-flip-only predictor boundary;
-4. test the scoped procedural pattern without treating it as a replacement for
-   the failed aggregate Q3 gate.
+M1R, MHR, Q2, M3R, and M3R-2 have calibrated and replicated the four
+foundation comparisons on Qwen3-1.7B. Q3's compact clean pre-flip predictor
+missed its fixed held-out gate twice, and the original procedural direction
+did not replicate. The next experiment should not be post-hoc feature tuning.
+If basin mapping continues, it should begin from a new preregistered
+mechanistic question with a stated interpretation boundary and rejection
+criterion.
 
 No controller rows should be used as causal branchpoint or basin-outcome
 labels, and no controller redesign should resume from the present evidence.
 
-### Frozen M3R-2 preregistration
+### Completed M3R-2 preregistration
 
-The prompt-breadth replication is now frozen as
-`observer-m3r2-basin-replication-v1` before any replication output is
-generated. It uses 15 prompts that are entirely new relative to M3R:
+The prompt-breadth replication was frozen as
+`observer-m3r2-basin-replication-v1` before any replication output was
+generated. It used 15 prompts that were entirely new relative to M3R:
 
 - factual: `seasons_tilt`, `rock_cycle`, `electric_circuit`;
 - procedural: `rice_steps`, `flat_tire_steps`, `tomato_transplant_steps`;
@@ -241,13 +240,13 @@ generated. It uses 15 prompts that are entirely new relative to M3R:
 - reasoning: `museum_tickets`, `rectangle_garden`, `discount_tax`;
 - code: `dedupe_order_code`, `clamp_code`, `word_frequencies_code`.
 
-The fixed grid is three seeds (`0`, `1`, `2`) by magnitudes `0` and `0.30`,
+The fixed grid was three seeds (`0`, `1`, `2`) by magnitudes `0` and `0.30`,
 for 90 runs on Qwen3-1.7B. Each run maps 64 tokens at layer 27 and continues
 at most five outcome-blind episodes for 96 intervention-free tokens with
 temperature 0.8, top-p 1.0, top-k 0, and paired per-position randomness.
 Identity controls and clean replay must be exact.
 
-The predictor uses whole-prompt holdout, L2 regularization `0.05`, a mean
+The predictor used whole-prompt holdout, L2 regularization `0.05`, a mean
 AUROC threshold of `0.70`, and at least five valid held-out prompts. Its input
 is limited to this frozen 23-field tuple:
 
@@ -280,5 +279,7 @@ prompt_class.reasoning
 The interpretation boundary is unchanged: improve and degrade mean higher and
 lower scores under a declared deterministic task rubric, not universal
 semantic quality. Ties, no-flips, invalid holdouts, and exact controls remain
-part of the reported evidence. The prompts, rubrics, features, regularization,
-and stop condition must not change in response to replication outcomes.
+part of the reported evidence. All 90 runs and 45 identity controls validated.
+The 13 valid held-out prompts reached mean AUROC 0.596, below 0.70, and the
+fresh procedural slice produced 16 improve / 19 degrade / 9 tie. The frozen
+design was not changed in response to those outcomes.
