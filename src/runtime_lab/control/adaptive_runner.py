@@ -24,7 +24,7 @@ from runtime_lab.core.io.artifacts import ensure_dir
 from runtime_lab.core.io.hashing import hash_config
 from runtime_lab.core.io.json import save_json
 from runtime_lab.core.runtime.engine import RuntimeEngine
-from runtime_lab.core.runtime.events import ControlEvent
+from runtime_lab.core.runtime.events import ControlEvent, runtime_event_to_record
 from .controller import StabilityController
 from .dashboard import generate_dashboard
 from .policy import ScalingPolicy
@@ -402,6 +402,8 @@ def run_control_experiment(
                     consumed_token_text=step.consumed_token_text,
                     predicted_next_token_id=int(step.predicted_next_token_id),
                     resolved_layer_idx=int(step.event.resolved_layer_idx),
+                    measure_resolved_layer_idx=int(step.event.measure_resolved_layer_idx),
+                    act_resolved_layer_idx=int(step.event.act_resolved_layer_idx),
                     hidden_pre_norm=float(step.event.hidden_pre_norm),
                     hidden_post_norm=float(step.event.hidden_post_norm),
                     hidden_delta_norm=float(step.event.hidden_delta_norm),
@@ -414,13 +416,8 @@ def run_control_experiment(
                     shadow=bool(config.shadow),
                 )
 
-                evt = {
-                    "t": ctrl_evt.t,
-                    "token_id": ctrl_evt.consumed_token_id,
-                    "token_text": ctrl_evt.consumed_token_text,
-                    "predicted_next_token_id": ctrl_evt.predicted_next_token_id,
-                    "measure_resolved_layer_idx": ctrl_evt.measure_resolved_layer_idx,
-                    "act_resolved_layer_idx": ctrl_evt.act_resolved_layer_idx,
+                evt = runtime_event_to_record(ctrl_evt)
+                evt.update({
                     "raw_div": float(raw_div),
                     "avg_score": float(ctl_state.avg_score),
                     "control_score": float(ctl_state.raw_score),
@@ -441,7 +438,7 @@ def run_control_experiment(
                     "controller_reference_hidden_norm": float(reference_norm),
                     "controller_ema_hidden_norm": float(reference_norm) if additive_reference == "ema" else None,
                     "backend": backend_result.backend,
-                }
+                })
 
                 events_f.write(json.dumps(evt, ensure_ascii=False) + "\n")
                 events_cache.append(evt)
@@ -529,15 +526,6 @@ def run_control_experiment(
     print(f"  - {summary_path}")
     if summary.get("artifacts", {}).get("dashboard_path"):
         print(f"  - {summary['artifacts']['dashboard_path']}")
-
-    artifacts = {
-        "run_dir": str(run_dir),
-        "events_path": str(events_path),
-        "output_path": str(output_path),
-        "summary_path": str(summary_path),
-        "config_hash": cfg_hash,
-        "dashboard_path": summary.get("artifacts", {}).get("dashboard_path"),
-    }
 
     # Returning the summary (dict) so sweep driver and programmatic callers
     # can uniformly call .get(). Legacy two-tuple callers (internal only)

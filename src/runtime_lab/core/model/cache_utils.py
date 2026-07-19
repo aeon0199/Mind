@@ -62,6 +62,37 @@ def _extract_first_key_tensor(past_key_values: Any):
     return None
 
 
+def cache_sequence_length(past_key_values: Any) -> int | None:
+    """Return the number of cached token positions when the cache exposes it."""
+    if past_key_values is None:
+        return None
+
+    get_seq_length = getattr(past_key_values, "get_seq_length", None)
+    if callable(get_seq_length):
+        try:
+            return int(get_seq_length())
+        except (TypeError, ValueError):
+            try:
+                return int(get_seq_length(0))
+            except (TypeError, ValueError):
+                pass
+
+    for attr in ("seen_tokens", "_seen_tokens"):
+        value = getattr(past_key_values, attr, None)
+        if value is not None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                pass
+
+    first_key = _extract_first_key_tensor(past_key_values)
+    if not isinstance(first_key, torch.Tensor) or first_key.ndim < 2:
+        return None
+    if first_key.ndim >= 3:
+        return int(first_key.shape[-2])
+    return int(first_key.shape[-1])
+
+
 def compute_cache_fingerprint(past_key_values: Any) -> str:
     first_key = _extract_first_key_tensor(past_key_values)
     if first_key is None or not isinstance(first_key, torch.Tensor):

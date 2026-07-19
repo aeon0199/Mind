@@ -37,6 +37,10 @@ def _set_deterministic_state(seed: int) -> None:
     torch.backends.cudnn.benchmark = False
 
 
+def resolve_intervention_seed(seed: Optional[int]) -> int:
+    return 42 if seed is None else int(seed)
+
+
 def _trajectory_from_seed_cache(
     model,
     tokenizer,
@@ -263,7 +267,7 @@ def run_stress_experiment(
         config.intervention_type,
         magnitude=config.intervention_magnitude,
         relative=bool(getattr(config, "intervention_magnitude_relative", True)),
-        seed=(config.seed or 42),
+        seed=resolve_intervention_seed(config.seed),
         **(intervention_kwargs or {}),
     )
 
@@ -330,7 +334,8 @@ def run_stress_experiment(
                 kl = logit_kl(base_logits[i], intr_logits[i])
                 js = logit_jensen_shannon(base_logits[i], intr_logits[i])
             except Exception:
-                kl = float("nan"); js = float("nan")
+                kl = float("nan")
+                js = float("nan")
             logit_kl_series.append(float(kl))
             logit_js_series.append(float(js))
     except Exception:

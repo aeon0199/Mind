@@ -96,7 +96,6 @@ def advise_stress(results: Dict[str, Any]) -> Advisory:
     token_match = _safe_float(metrics.get("token_match_rate"))
     first_div = _safe_float(metrics.get("first_token_divergence"))
     recovery = _safe_float(metrics.get("recovery_ratio"))
-    primary = _safe_float(metrics.get("primary_metric"))
     logit_kl = _safe_float(metrics.get("logit_kl_mean_during"))  # new field if present
 
     layer = int(cfg.get("intervention_layer", -1))
@@ -163,8 +162,8 @@ def advise_stress(results: Dict[str, Any]) -> Advisory:
 
     if first_div is not None and first_div < 1e-6:
         adv.observations.append(
-            "first_token_divergence ≈ 0 — first perturbed token still matched baseline; "
-            "confirms perturbation magnitude/layer effectively inert at first step."
+            "first_token_divergence = 0 — the perturbed trajectory differed immediately "
+            "at the first compared token."
         )
 
     adv.summary_line = _fmt_summary(
@@ -223,7 +222,7 @@ def advise_hysteresis(summary: Dict[str, Any]) -> Advisory:
         adv.confidence = "high"
         adv.summary_line = _fmt_summary(
             mode=f"hysteresis:{mode}",
-            leads=[f"regime=no-propagation", f"drift={_fmt(drift)}"],
+            leads=["regime=no-propagation", f"drift={_fmt(drift)}"],
             flags=adv.flags,
         )
         return adv

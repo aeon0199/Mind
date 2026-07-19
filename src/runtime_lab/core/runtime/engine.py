@@ -7,6 +7,7 @@ import torch
 
 from runtime_lab.core.diagnostics.manager import DiagnosticsManager
 from runtime_lab.core.interventions.base import Intervention
+from runtime_lab.core.model.cache_utils import cache_sequence_length
 from runtime_lab.core.model.layers import resolve_layer_index, resolve_probe_layers, resolve_transformer_layers
 from runtime_lab.core.runtime.events import RuntimeEvent
 from runtime_lab.core.runtime.hooks import HiddenCaptureHook, HiddenInterventionHook
@@ -184,7 +185,13 @@ class RuntimeEngine:
             self.measure_capture_hook.reset()
 
         token_tensor = torch.tensor([[int(consumed_token_id)]], device=self.device)
-        attn = torch.ones((1, prompt_len + t + 1), device=self.device, dtype=torch.long)
+        cached_tokens = cache_sequence_length(past_key_values)
+        attention_length = (
+            int(cached_tokens) + int(token_tensor.shape[1])
+            if cached_tokens is not None
+            else int(prompt_len) + int(t) + int(token_tensor.shape[1])
+        )
+        attn = torch.ones((1, attention_length), device=self.device, dtype=torch.long)
 
         with torch.no_grad():
             out = self.model(

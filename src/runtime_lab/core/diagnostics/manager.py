@@ -15,6 +15,7 @@ def summarize_diagnostics_health(records: list[Dict]) -> Dict:
     total = 0
     degraded = 0
     invalid = 0
+    valid_steps = 0
     issue_counts: Dict[str, int] = {}
 
     for diagnostics in records:
@@ -26,6 +27,8 @@ def summarize_diagnostics_health(records: list[Dict]) -> Dict:
             degraded += 1
         if health.get("valid") is False:
             invalid += 1
+        if health.get("valid") is not False and not health.get("degraded"):
+            valid_steps += 1
         for item in health.get("issues", []) or []:
             issue = str(item.get("issue", "unknown"))
             issue_counts[issue] = int(issue_counts.get(issue, 0) + 1)
@@ -34,7 +37,8 @@ def summarize_diagnostics_health(records: list[Dict]) -> Dict:
         "steps_observed": int(total),
         "degraded_steps": int(degraded),
         "invalid_steps": int(invalid),
-        "ok": bool(invalid == 0),
+        "valid_steps": int(valid_steps),
+        "ok": bool(total > 0 and valid_steps > 0 and invalid == 0),
         "issue_counts": issue_counts,
     }
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, Optional
 
 
@@ -27,3 +27,11 @@ class ControlEvent(RuntimeEvent):
     next_scale: float = 1.0
     status: str = "STABLE"
     shadow: bool = False
+
+
+def runtime_event_to_record(event: RuntimeEvent) -> Dict[str, Any]:
+    """Serialize one causal token decision with explicit and legacy names."""
+    record = asdict(event)
+    record["token_id"] = int(event.consumed_token_id)
+    record["token_text"] = str(event.consumed_token_text)
+    return record

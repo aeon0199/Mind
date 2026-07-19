@@ -15,6 +15,7 @@ from runtime_lab.core.io.artifacts import ensure_dir
 from runtime_lab.core.io.hashing import hash_config
 from runtime_lab.core.io.json import save_json
 from runtime_lab.core.runtime.engine import RuntimeEngine
+from runtime_lab.core.runtime.events import runtime_event_to_record
 
 
 def _set_seed(seed: Optional[int]) -> None:
@@ -126,17 +127,7 @@ def run_observe_experiment(
                 past_key_values = step.past_key_values
                 pending_token_id = int(step.predicted_next_token_id)
 
-                event = {
-                    "t": int(step.t),
-                    "token_id": int(step.consumed_token_id),
-                    "token_text": step.consumed_token_text,
-                    "predicted_next_token_id": int(step.predicted_next_token_id),
-                    "hidden_pre_norm": float(step.event.hidden_pre_norm),
-                    "hidden_post_norm": float(step.event.hidden_post_norm),
-                    "hidden_delta_norm": float(step.event.hidden_delta_norm),
-                    "diagnostics": step.diagnostics,
-                    "mode": "observe",
-                }
+                event = runtime_event_to_record(step.event)
 
                 events_f.write(json.dumps(event, ensure_ascii=False) + "\n")
                 events.append(event)

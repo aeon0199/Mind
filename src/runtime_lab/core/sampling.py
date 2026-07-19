@@ -16,10 +16,23 @@ Two concerns:
 
 from __future__ import annotations
 
-import math
-from typing import Tuple
-
 import torch
+
+
+def nucleus_keep_mask(sorted_probabilities: torch.Tensor, top_p: float) -> torch.Tensor:
+    """Keep the smallest sorted prefix whose cumulative mass reaches ``top_p``."""
+    probabilities = sorted_probabilities.detach().float()
+    if probabilities.ndim != 1:
+        raise ValueError("nucleus_keep_mask expects a one-dimensional sorted probability tensor")
+    if probabilities.numel() == 0:
+        return torch.zeros_like(probabilities, dtype=torch.bool)
+    if top_p is None or float(top_p) >= 1.0:
+        return torch.ones_like(probabilities, dtype=torch.bool)
+
+    cumulative_before = probabilities.cumsum(dim=-1) - probabilities
+    keep = cumulative_before < max(0.0, float(top_p))
+    keep[0] = True
+    return keep
 
 
 def sample_token_id(
@@ -49,10 +62,8 @@ def sample_token_id(
 
     if top_p and 0.0 < top_p < 1.0:
         sorted_logits, sorted_idx = torch.sort(x, descending=True)
-        cum_probs = torch.softmax(sorted_logits, dim=-1).cumsum(dim=-1)
-        keep = cum_probs <= top_p
-        # Always keep at least one token
-        keep[0] = True
+        sorted_probs = torch.softmax(sorted_logits, dim=-1)
+        keep = nucleus_keep_mask(sorted_probs, top_p)
         # Zero out those we drop (in sorted space)
         sorted_logits = torch.where(keep, sorted_logits, torch.full_like(sorted_logits, float("-inf")))
         # Scatter back
