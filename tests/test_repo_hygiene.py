@@ -6,13 +6,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RepoHygieneTests(unittest.TestCase):
-    def test_branchpoint_analyzer_default_allows_current_q1_slices(self):
+    def test_branchpoint_analyzer_defaults_to_repeated_run_grouped_evaluation(self):
         from scripts import analyze_branchpoints
 
         parser = analyze_branchpoints.build_arg_parser()
         args = parser.parse_args([])
 
-        self.assertEqual(args.min_valid_pairs, 5)
+        self.assertEqual(args.repeats, 20)
+        self.assertEqual(args.min_runs, 3)
 
     def test_ci_checks_active_runtime_package(self):
         ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
