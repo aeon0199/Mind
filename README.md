@@ -41,8 +41,11 @@ been repaired, and the first target-model calibration is complete. On
 Qwen3-1.7B, clean features predicted same-context local flips above the
 prespecified AUROC threshold at relative magnitude 0.30 on both prompt slices.
 Matched hysteresis also revealed strongly seed-dependent near-zero versus
-order-one propagation. The historical closed-loop thesis remains paused while
-the project moves to per-layer propagation mapping.
+order-one propagation. A 280-run per-layer propagation sweep then showed that
+raw L2 growth, normalized structural disturbance, and output disruption are
+different quantities: final RMSNorm erases radial final-layer scaling but not
+directional additive changes. The historical closed-loop thesis remains paused
+while the project rebuilds causal basin-outcome mapping.
 
 Start with:
 
@@ -51,6 +54,8 @@ Start with:
 - `RESEARCH.md` for the active evidence ledger and next experiment.
 - `docs/FOUNDATION_CALIBRATION_2026-07-19.md` for the first repaired-protocol
   target-model result.
+- `docs/Q2_PROPAGATION_CALIBRATION_2026-07-19.md` for the downstream-layer
+  propagation result.
 - `RESEARCH_CONTROLLER.md` for the archived controller evidence.
 - `docs/RESEARCH_WORKFLOW.md` for the experiment handoff discipline.
 
@@ -153,6 +158,14 @@ python -m runtime_lab.cli.main hysteresis \
   --noise-layer mid \
   --noise-magnitude 0.15 \
   --recovery-tokens 32
+
+# 5) Independent same-context downstream-layer propagation map
+python -m runtime_lab.cli.main propagation \
+  --prompt "Explain how airplanes fly." \
+  --max-tokens 32 \
+  --layer mid \
+  --type additive \
+  --magnitude 0.20
 ```
 
 ---
@@ -209,6 +222,13 @@ Every run produces structured, reusable output — not just text.
 - One independent clean/perturbed fork per shared decision context
 - Context fingerprints, paired RNG status, local argmax/sample flips
 - Clean pre-intervention diagnostics for downstream analysis
+
+**Per-layer propagation runs:**
+- Independent clean/perturbed one-step forks at every clean decision
+- Paired deltas at the injection block, every downstream transformer block,
+  and final normalization
+- Absolute L2, relative L2, cosine distance, amplification, logit KL/JS, and
+  local token flips
 
 **Observability runs:**
 - Token-by-token telemetry: simple baselines, local prediction error, spectral

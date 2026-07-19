@@ -57,20 +57,50 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
   calibration target remains Qwen3-1.7B; cross-model generalization is later.
 - **Foundation contract**: [docs/OBSERVER_FOUNDATIONS.md](docs/OBSERVER_FOUNDATIONS.md).
   Active work follows Observe → Perturb → Compare → Prove. Act is downstream.
-- **Program structure**: three mapping questions, Q1–Q3 in §3. **Q1 status: scoped positive**
-  after independent local branchpoint calibration; Q2 is the active question.
+- **Program structure**: three mapping questions, Q1–Q3 in §3. **Q1 status: scoped positive**;
+  **Q2 status: scoped mechanistic answer**; Q3 is next after its causal
+  protocol is rebuilt.
 - **Controller status**: **paused**, not dead. §4 defines the evidence that would bring controller research back to active status.
-- **Instrument status**: foundation mechanics are repaired and the first
-  42-cell Qwen3-1.7B calibration is complete. All zero controls, context
-  matching, recovery matching, config hashes, and run-directory uniqueness
-  checks passed.
-- **Next recommended action**: begin Q2 with a true per-layer paired-delta
-  propagation instrument. Endpoint hysteresis distances cannot identify where
-  a delta is amplified or absorbed inside the residual stream.
+- **Instrument status**: foundation mechanics, local branchpoints, matched
+  recovery, and same-context per-layer propagation are implemented and
+  calibrated on Qwen3-1.7B. The completed suites contain 322 target-model runs
+  (42 M1R/MHR + 280 Q2).
+- **Next recommended action**: replace historical controller-dependent M3.1
+  with a causal branch-continuation and explicit outcome-evaluation protocol
+  before running Q3.
 
 ---
 
 ## 2a. Mapping-program findings
+
+- **F34 — PER-LAYER PROPAGATION CALIBRATED** — **Raw L2 amplification is not
+  a sufficient definition of destructive cascade.** Q2 ran 280
+  Qwen3-1.7B same-context propagation cells: 5 seeds × 2 prompts × 4
+  injection layers × additive {0, 0.10, 0.20, 0.30} or scaling
+  {1.0, 0.5, 1.5}. Each of 4,200 paired decisions captured every downstream
+  transformer block and final RMSNorm.
+  - All 80 identity-control runs were exact no-ops across 1,200 paired
+    decisions. All 280 config hashes and run directories were unique.
+  - At additive magnitude 0.30, raw L2 amplification to layer 27 fell from
+    8.662× for layer-6 injection to 1× for layer-27 injection. Final relative
+    disturbance moved the other way: 0.0699 at layer 6 versus 0.2800 at layer
+    27. Earlier raw growth largely reflects residual-stream scale.
+  - Final-layer scale 0.5 was removed exactly by RMSNorm; scale 1.5 was reduced
+    to relative delta 7.54e-8 and mean KL 1.33e-8. Both produced 0/150 argmax
+    flips. Directional additive magnitude 0.30 survived with relative delta
+    0.2800, mean KL 0.0861, and 18/150 flips.
+  - Scaling down was much more disruptive than scaling up despite equal direct
+    relative magnitude. At layer 6, mean KL was 0.1947 for scale 0.5 and
+    0.0447 for scale 1.5.
+  - Layer 13 had the lowest aggregate mean logit KL at every tested
+    non-control setting, but did not uniformly minimize prompt-slice argmax
+    flips. It is a mapping candidate, not a controller-ready bounded layer.
+  - **Verdict:** Q2 has a scoped mechanistic answer. Historical F27's “earlier
+    layer = worse” is not a universal local law and likely includes repeated
+    exposure/context cascade. The Q2 controller-return criterion is not met.
+  - Evidence: `docs/Q2_PROPAGATION_CALIBRATION_2026-07-19.md`.
+  - Confidence: **high** in protocol validity and measured curves; **medium**
+    in layer-13 candidacy because prompt diversity remains narrow.
 
 - **F32 — RECALIBRATED** — **Clean pre-intervention features predict local
   same-context argmax flippability at the calibrated Qwen3-1.7B setting.**
@@ -219,11 +249,12 @@ open.
 - If any layer has bounded propagation, that's the principled layer for a future controller.
 - Useful for any hidden-state intervention work (safety, steering, interpretability).
 
-**Current status**: **active after MHR/F33.** Matched endpoint measurements now
-show thresholded, seed-dependent propagation, but `layer_stiffness` is a
-within-trajectory velocity diagnostic and cannot reconstruct the paired
-clean-vs-perturbed delta at each downstream layer. Q2 therefore needs an
-explicit per-layer paired-delta trace.
+**Current status**: **scoped mechanistic answer after M2R/F34.** The repaired
+instrument maps paired deltas through every downstream block and final norm.
+Raw L2 amplification, relative/angular structure, and output disruption do not
+share one monotonic depth law. Layer 13 is the lowest aggregate-KL candidate,
+but the controller-return requirement for a prompt-robust bounded layer has not
+landed.
 
 ---
 
@@ -245,7 +276,11 @@ explicit per-layer paired-delta trace.
 - If improvement predictors exist, the controller gains a meaningful trigger: "act only when expected-improvement > threshold."
 - Either way: a complete interpretability story about perturbation-induced basin-hopping.
 
-**Current status**: not started. F29 is a single data point (TinyLlama). Needs at least 2 more models.
+**Current status**: **protocol rebuild next.** Historical F29 is a useful
+controller-era observation, but M3.1's shadow/active controller design cannot
+causally label a branchpoint outcome. M3R will use verified local forks,
+paired branch continuation, declared outcome evaluators, five prompt classes,
+and prompt-held-out analysis within Qwen3-1.7B.
 
 ---
 
@@ -265,10 +300,10 @@ If any two land, a controller redesign experiment is warranted. If none land dur
 
 ## 5. Mapping backlog
 
-Order: M1R and MHR are complete. Q2 per-layer paired-delta propagation is next.
-Do not return to controller work: only the mapping AUROC stop condition landed;
-the controller-specific precision, bounded-cascade, and directionality
-criteria have not.
+Order: M1R, MHR, and M2R are complete. Rebuild Q3's causal basin-outcome
+protocol next. Do not return to controller work: the controller-specific
+precision, prompt-robust bounded-layer, and expected-improvement criteria have
+not landed.
 
 ### [x] M1R — Recalibrate local branchpoint flippability
 
@@ -351,25 +386,43 @@ criteria have not.
   hidden velocity, and hidden acceleration. The active local branchpoint format
   records clean top-1 margin and clean diagnostics.
 
-### [ ] M2.1 — Per-layer propagation measurement from existing data
-- **Question**: For the stress runs we already have at varying `intervention_layer`, extract the delta L2 norm at each probe_layer downstream of the injection. Build the propagation curve from existing events.jsonl layer_stiffness fields.
-- **Design**: pure offline analysis of all existing stress runs.
-- **Stop condition**: per-layer propagation curve for at least 2 intervention types at 3 injection layers on Qwen3-1.7B. If clean monotonic pattern, claim; otherwise needs M2.2.
-- **Expected runtime**: ~30 min analysis.
-- **Outcome**: _(filled when complete)_
+### [!] M2.1 — Historical offline propagation proposal *(insufficient)*
+- **Correction**: `layer_stiffness` is within-trajectory hidden velocity, not a
+  paired clean-vs-perturbed layer delta. Existing stress rows also become
+  context-shifted after a token difference. They cannot reconstruct Q2's local
+  propagation curve.
+- **Outcome**: rejected as a measurement mismatch before claim generation.
 
-### [ ] M2.2 — Synthetic-injection propagation sweep (only if M2.1 inconclusive)
-- **Question**: If events.jsonl doesn't have enough probe_layer coverage, run a controlled observe suite with synthetic injection: seed an additive delta at chosen layer, hook-capture hidden states at every subsequent layer.
-- **Design**: needs a small code change in the observe runner to allow "inject at L, capture at all downstream" mode. 3 injection layers × 3 magnitudes × 3 seeds × 2 models.
-- **Code**: Codex territory. ~40 lines in observe/runner.py + a new orchestrator.
-- **Blocked on**: M2.1 being insufficient + Codex code change.
+### [x] M2R / historical M2.2 — Same-context synthetic propagation sweep
+- **Question**: At one verified decision context, how does an injected delta
+  change through every downstream block and final normalization?
+- **Design**: 280 Qwen3-1.7B runs across 5 seeds, 2 prompts, layers
+  {6, 13, 20, 27}, additive and scaling interventions, exact type-specific
+  controls, 15 paired decisions per run.
+- **Stop condition**: valid per-layer curves for at least two intervention
+  types and three injection layers, with normalized/angular metrics and prompt
+  slices as well as raw L2.
+- **Outcome**: complete 2026-07-19. See F34 and
+  `docs/Q2_PROPAGATION_CALIBRATION_2026-07-19.md`.
 
-### [ ] M3.1 — Prompt-class basin mapping on Qwen3-1.7B
-- **Question**: Within Qwen3-1.7B, does the branchpoint-hijack outcome (improve vs degrade vs no-effect) systematically depend on prompt class? E.g., does the controller help on procedural prompts more than on creative ones?
-- **Design**: 5 prompt classes (factual / procedural / creative / reasoning / code) × 3 seeds × 2 cells (shadow + opposing-anchor additive at L=-1, mag=0.3/0.6) = 30 control runs.
-- **Stop condition**: one prompt-class feature that predicts improve-vs-degrade with AUROC ≥ 0.7 within Qwen3-1.7B.
-- **Expected runtime**: ~5 min with daemon.
-- **Outcome**: _(filled when complete)_
+### [ ] M3R — Causal prompt-class basin mapping on Qwen3-1.7B
+- **Question**: When an independent branchpoint fork changes a decision and
+  both branches are then continued, which pre-flip/context features predict a
+  better versus worse outcome?
+- **Protocol rebuild required**:
+  - no controller or shadow/active pair;
+  - select branchpoints from verified same-context forks;
+  - continue both clean and perturbed branches under an explicit matched
+    continuation policy;
+  - evaluate outcome with declared prompt-specific checks and blinded paired
+    scoring;
+  - preserve no-flip and no-effect cells instead of silently dropping them.
+- **Evidence standard**: at least 5 prompt classes × 3 seeds per configuration,
+  all on Qwen3-1.7B.
+- **Stop condition**: a pre-flip feature or declared prompt-class feature
+  predicts improve versus degrade with held-out AUROC ≥0.70. Report coverage,
+  ties/no-effect, class balance, and prompt-held-out results.
+- **Outcome**: _(pending protocol implementation and evaluator validation)_
 
 ---
 
@@ -396,6 +449,14 @@ criteria have not.
   at magnitude 0.30. Matched hysteresis exposed seed-dependent near-zero versus
   order-one propagation at the same magnitude. Q1 is scoped positive; Q2
   per-layer paired-delta tracing is next; controller remains paused.
+- **2026-07-19 · Q2 propagation calibrated; F34.** Completed and revalidated
+  280 same-context per-layer runs / 4,200 paired decisions across two
+  intervention families and four injection depths. Raw L2 grew toward late
+  layers while relative/angular disturbance usually contracted; final RMSNorm
+  erased radial final-layer scaling but preserved directional additive change.
+  Layer 13 is the lowest aggregate-KL candidate, not a controller-ready answer.
+  Q3's historical controller-dependent task was replaced with M3R, a causal
+  branch-continuation protocol rebuild.
 
 _(For sessions covering the controller arc 2026-02 through 2026-04-19, see [RESEARCH_CONTROLLER.md](RESEARCH_CONTROLLER.md) §5.)_
 

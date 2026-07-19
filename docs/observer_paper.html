@@ -521,6 +521,14 @@
     propagation at the same magnitude on different seeds. These new findings
     are F32/F33 below; they do not resume the controller.
   </p>
+  <p>
+    A subsequent 280-run Q2 sweep captured paired deltas at every downstream
+    block and final RMSNorm. It found that raw L2 amplification, normalized
+    structural disturbance, and output disruption are not interchangeable.
+    Final RMSNorm erases radial final-layer scaling but preserves directional
+    additive change. F34 records the scoped result; Q3's causal protocol is
+    next and controller work remains paused.
+  </p>
 </div>
 
 <div class="callout callout-green" style="margin-bottom: 2.5rem;">
@@ -1579,9 +1587,47 @@ Metrics:
   </p>
   <p>
     Absolute initial, propagated, and residual distances are the primary
-    evidence. Endpoint calibration does not identify the downstream layer
-    where amplification occurs, so Q2 per-layer paired-delta tracing is next.
-    No bounded-cascade controller layer has been established.
+    evidence. Endpoint calibration did not identify the downstream layer where
+    amplification occurred; F34 records the subsequent Q2 trace. No
+    bounded-cascade controller layer was established by F33.
+  </p>
+
+  <h3>F34 — Per-layer propagation separates scale from structure</h3>
+  <p>
+    Q2 ran 280 Qwen3-1.7B cells across five seeds, two prompts, layers
+    6/13/20/27, additive magnitudes 0/0.10/0.20/0.30, and scaling factors
+    1.0/0.5/1.5. At each of 4,200 decisions, independent clean and perturbed
+    one-step forks shared the same cache and RNG. The instrument captured every
+    downstream transformer block and final RMSNorm, discarded the perturbed
+    fork, and advanced only clean generation. All 80 identity-control runs were
+    exact no-ops.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Additive magnitude 0.30</th><th>L6</th><th>L13</th><th>L20</th><th>L27</th></tr></thead>
+      <tbody>
+        <tr><td>Peak raw-L2 amplification</td><td>8.662×</td><td>4.214×</td><td>1.684×</td><td>1.000×</td></tr>
+        <tr><td>Final relative delta</td><td>0.0699</td><td>0.0975</td><td>0.1929</td><td>0.2800</td></tr>
+        <tr><td>Mean logit KL</td><td>0.0347</td><td><strong>0.0227</strong></td><td>0.0629</td><td>0.0861</td></tr>
+        <tr><td>Argmax flips</td><td>10/150</td><td>9/150</td><td>12/150</td><td>18/150</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Earlier injections grew more in absolute L2 because residual-stream scale
+    grows through the network, while their relative and angular disturbance
+    usually contracted. Historical F27's “earlier layer = worse” is therefore
+    not a universal local law; repeated intervention and context cascade remain
+    plausible causes of the controller-era result.
+  </p>
+  <p>
+    Final-layer scale 0.5 was removed exactly by RMSNorm. Scale 1.5 was reduced
+    to relative delta 7.54e-8 and mean KL 1.33e-8, with zero argmax flips.
+    Directional additive magnitude 0.30 survived with relative delta 0.2800 and
+    18/150 flips. Scaling direction and prompt also mattered materially. Layer
+    13 had the lowest aggregate mean KL in every non-control setting, but did
+    not uniformly minimize prompt-slice flips. Q2 thus has a scoped
+    mechanistic answer, not a controller-ready bounded-layer result.
   </p>
 </section>
 
@@ -1612,13 +1658,13 @@ Metrics:
           <td><strong>Q2</strong></td>
           <td>Perturbation propagation: how does an injected delta evolve through the residual stream?</td>
           <td>Per-layer propagation curves that mechanistically explain F27.</td>
-          <td>Open</td>
+          <td><strong>Scoped mechanistic answer (F34); controller criterion not met</strong></td>
         </tr>
         <tr>
           <td><strong>Q3</strong></td>
           <td>Basin structure: when does a flip improve vs. degrade output?</td>
           <td>Pre-flip generation feature predicts improve-vs-degrade with AUROC ≥ 0.7 on Qwen3-1.7B.</td>
-          <td>Open (F29 is one cross-model data point)</td>
+          <td>Protocol rebuild next</td>
         </tr>
       </tbody>
     </table>
@@ -1703,8 +1749,9 @@ Metrics:
   <p>
     <strong>Target-model calibration is narrow.</strong> F32/F33 cover
     Qwen3-1.7B, three seeds, two prompts, one branchpoint layer, one hysteresis
-    layer, and the reported magnitudes. Cross-model, broader prompt, and
-    per-layer propagation claims remain open.
+    layer, and the reported magnitudes. F34 adds five seeds, four injection
+    depths, and two intervention families, but still only two prompts and one
+    model. Cross-model and broad prompt-class claims remain open.
   </p>
   <p>
     <strong>Prompt-class diversity.</strong> The repaired F32 suite reran one
@@ -1721,10 +1768,11 @@ Metrics:
     sampled token is unchanged.
   </p>
   <p>
-    <strong>Branchpoint calibration not yet run.</strong> Repaired local
-    branchpoint artifacts include clean top-1 margin, logit entropy, hidden
-    velocity/acceleration, local prediction error, spectral, and SVD features.
-    Whether any predicts local flips out of sample remains empirical.
+    <strong>Basin-outcome evaluation is not yet rebuilt.</strong> F32 predicts
+    local flippability and F34 maps local propagation; neither says whether a
+    continued perturbed branch is semantically better. Historical M3.1 depended
+    on controller shadow/active runs. The replacement must use verified
+    branchpoint continuations and declared prompt-specific outcome evaluators.
   </p>
   <p>
     <strong>Asserted controller weights.</strong> The 70/15/10/5 weighting in the v1
@@ -1809,11 +1857,11 @@ Metrics:
   </p>
 
   <p>
-    <strong>Foundation-first work queued.</strong> The next experiment is a small
-    Qwen3 calibration suite: independent local branchpoints and matched
-    hysteresis over at least three seeds, two prompts, and zero/nonzero
-    magnitudes. Q2 and Q3 follow only after those protocols produce valid
-    target-model evidence. No controller rows will be used as local labels.
+    <strong>Foundation-first work queued.</strong> M1R, MHR, and Q2 propagation
+    calibration are complete. The next task is M3R: a controller-independent
+    branch-continuation protocol with explicit outcome evaluation across five
+    prompt classes. No controller rows will be used as causal branchpoint or
+    basin-outcome labels.
   </p>
 </section>
 

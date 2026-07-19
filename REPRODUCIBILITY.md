@@ -17,7 +17,10 @@
    not local branchpoint labels.
 9. For recovery claims, require `protocol_validity.matched_recovery=true` and
    proven propagation above the configured floor.
-10. For archived shadow/active controller comparisons, record
+10. For per-layer propagation claims, require independent matched one-step
+    forks, complete downstream-block capture, and terminal-normalization
+    capture. Report absolute, relative, and angular deltas together.
+11. For archived shadow/active controller comparisons, record
     `intervention_applied` counts per run—a passing cell where the controller
     never fired is a measurement-layer confound.
 
@@ -52,6 +55,12 @@ Mode-specific extras:
   argmax/sample flips, hidden distances, KL/JS, and clean diagnostics.
   `protocol_validity.independent_one_step_forks` and
   `all_contexts_matched` must be true.
+- **propagation**: `same-context-layer-propagation-v1`. Writes one paired row
+  per clean decision with `layer_deltas` from the injection block through every
+  downstream transformer block plus `terminal_deltas.final_norm`. The
+  perturbed fork is discarded and only clean generation advances. Require
+  `all_contexts_matched`, `all_layers_captured`, and
+  `terminal_capture_complete`.
 - **hysteresis**: `matched-exposure-recovery-v2`. Writes four primary traces:
   `clean_exposure`, `perturbed_exposure`, `clean_recovery`, and
   `perturbed_recovery`, plus aligned distance curves in `summary.json` and
@@ -85,7 +94,11 @@ Mode-specific extras:
 4. For matched hysteresis, report direct-effect peak, propagated exposure
    endpoint, residual recovery endpoint, propagation floor, EOS truncation, and
    all protocol-validity fields.
-5. For controller-mode A/B claims, always report `intervention_applied` totals
+5. For propagation curves, aggregate whole-run means equally; report raw L2,
+   relative-clean L2, cosine distance, injection-normalized amplification,
+   final-normalization deltas, logit KL/JS, and local flip rates. Do not call
+   raw L2 growth destructive without normalized or angular evidence.
+6. For controller-mode A/B claims, always report `intervention_applied` totals
    per cell. If the active cell barely fired (or fired more than expected) the
    measurement is suspect.
 

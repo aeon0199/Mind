@@ -57,6 +57,23 @@ This answers the local causal question: **would this intervention change the
 next decision under the same context?** It does not confuse a downstream
 cascade after an earlier flip with a new local flip.
 
+### Same-context per-layer propagation
+
+At the same independent decision boundary, propagation mode keeps the clean
+and perturbed forks local but captures both at every downstream transformer
+block and at final normalization. It reports:
+
+- absolute delta L2, which is sensitive to the residual stream's changing
+  scale;
+- delta L2 relative to the clean state;
+- cosine distance, which isolates angular/structural change;
+- amplification relative to the injected delta;
+- logit KL/JS and local token flips.
+
+These quantities must be interpreted together. Raw L2 growth is not by itself
+evidence of destructive cascade, and final normalization can remove radial
+scaling while preserving directional changes.
+
 ### Exposure and propagation
 
 A stress run can instead continue clean and perturbed branches across an
@@ -75,7 +92,8 @@ Comparisons must match the question being asked.
 - **Local sensitivity:** argmax flip, paired sampled-token flip, logit KL/JS,
   hidden cosine distance, and relative hidden L2 at one shared context.
 - **Propagation:** aligned clean and perturbed trajectories across and after an
-  intervention window.
+  intervention window, or independent same-context layer-by-layer paired
+  deltas for local propagation.
 - **Matched recovery:** two branches begin from the same cache, experience
   equal exposure instructions, and then both continue for the same requested
   recovery length with no intervention. Recovery is classified only when the
