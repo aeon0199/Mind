@@ -80,6 +80,10 @@ class TrajectoryComparison:
                     hidden_cos = None
                     hidden_l2_rel = None
                     break
+                if b_raw.shape == v_raw.shape and torch.equal(b_raw, v_raw):
+                    hidden_cos.append(0.0)
+                    hidden_l2_rel.append(0.0)
+                    continue
 
                 b = b_raw.float().view(-1)
                 v = v_raw.float().view(-1)
