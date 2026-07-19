@@ -26,6 +26,25 @@ def resolve_transformer_layers(model) -> Any:
     raise AttributeError("Could not locate transformer layers on model")
 
 
+def resolve_final_norm_module(model) -> tuple[str | None, Any | None]:
+    candidates = [
+        ("model", "norm"),
+        ("transformer", "ln_f"),
+        ("gpt_neox", "final_layer_norm"),
+        ("model", "decoder", "final_layer_norm"),
+        ("transformer", "norm_f"),
+    ]
+    for path in candidates:
+        current = model
+        for attribute in path:
+            if not hasattr(current, attribute):
+                break
+            current = getattr(current, attribute)
+        else:
+            return ".".join(path), current
+    return None, None
+
+
 def resolve_layer_index(requested_idx: int, num_layers: int) -> int:
     idx = int(requested_idx)
     if idx < 0:

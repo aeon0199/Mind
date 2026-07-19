@@ -41,6 +41,7 @@ class StepResult:
     measure_hidden: Optional[torch.Tensor]
     hidden_pre: Optional[torch.Tensor]
     hidden_post: Optional[torch.Tensor]
+    layer_states: Dict[int, torch.Tensor]
     diagnostics: Dict[str, Any]
     event: RuntimeEvent
     past_key_values: Any
@@ -271,6 +272,7 @@ class RuntimeEngine:
             measure_hidden=measure_hidden,
             hidden_pre=hidden_pre,
             hidden_post=hidden_post,
+            layer_states=layer_states,
             diagnostics=diagnostics,
             event=event,
             past_key_values=out.past_key_values,

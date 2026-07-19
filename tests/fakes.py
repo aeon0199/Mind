@@ -52,6 +52,7 @@ class _FakeTransformer(torch.nn.Module):
     def __init__(self, num_layers):
         super().__init__()
         self.h = torch.nn.ModuleList([_FakeLayer() for _ in range(num_layers)])
+        self.ln_f = _FakeLayer()
 
 
 class FakeCausalModel(torch.nn.Module):
@@ -97,6 +98,7 @@ class FakeCausalModel(torch.nn.Module):
 
         for layer in self.transformer.h:
             hidden = layer(hidden)
+        hidden = self.transformer.ln_f(hidden)
 
         logits = torch.full(
             (input_ids.shape[0], input_length, 4),

@@ -6,6 +6,7 @@ from . import branchpoints as branchpoints_cli
 from . import control as control_cli
 from . import hysteresis as hysteresis_cli
 from . import observe as observe_cli
+from . import propagation as propagation_cli
 from . import stress as stress_cli
 
 
@@ -25,6 +26,12 @@ def main() -> None:
     )
     branchpoints_cli.add_branchpoint_args(branchpoint_parser)
 
+    propagation_parser = sub.add_parser(
+        "propagation",
+        help="Independent same-context downstream-layer delta map",
+    )
+    propagation_cli.add_propagation_args(propagation_parser)
+
     hysteresis_parser = sub.add_parser(
         "hysteresis",
         help="Matched clean/perturbed exposure and recovery protocol",
@@ -42,6 +49,8 @@ def main() -> None:
         stress_cli.run_from_args(args)
     elif args.mode == "branchpoints":
         branchpoints_cli.run_from_args(args)
+    elif args.mode == "propagation":
+        propagation_cli.run_from_args(args)
     elif args.mode == "hysteresis":
         hysteresis_cli.run_from_args(args)
     elif args.mode == "control":
