@@ -314,13 +314,14 @@ def build_cli_command(payload: Dict[str, Any]) -> List[str]:
         _pass("start", "--start", lambda value: str(int(value)))
         _pass("duration", "--duration", lambda value: str(int(value)))
     elif mode == "hysteresis":
-        perturbation_mode = str(payload.get("perturbation_mode") or "prompt")
+        perturbation_mode = str(payload.get("perturbation_mode") or "noise")
         cmd += ["--perturbation-mode", perturbation_mode]
         if perturbation_mode == "noise":
             _pass("noise_layer", "--noise-layer")
             _pass("noise_magnitude", "--noise-magnitude", lambda value: str(float(value)))
             _pass("noise_start", "--noise-start", lambda value: str(int(value)))
             _pass("noise_duration", "--noise-duration", lambda value: str(int(value)))
+            _pass("recovery_tokens", "--recovery-tokens", lambda value: str(int(value)))
     elif mode == "control":
         _pass("measure_layer", "--measure-layer", lambda value: str(int(value)))
         _pass("act_layer", "--act-layer", lambda value: str(int(value)))

@@ -18,7 +18,12 @@ from ._sweep import run_sweep
 def add_hysteresis_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", default=None)
     parser.add_argument("--prompt", default="Explain how airplanes fly in a clear, accurate way.")
-    parser.add_argument("--max-tokens", type=int, default=128)
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=128,
+        help="Number of aligned exposure decisions before recovery.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--backend", default="hf", choices=["hf", "nnsight"])
     parser.add_argument("--nnsight-remote", action="store_true")
@@ -27,13 +32,11 @@ def add_hysteresis_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--runs-dir", default=None)
     parser.add_argument(
         "--perturbation-mode",
-        default="prompt",
-        choices=["prompt", "noise"],
+        default="noise",
+        choices=["noise"],
         help=(
-            "'prompt': inject a synthetic <REFLECTION> block (legacy — measures "
-            "prompt-contamination persistence). 'noise': apply a seeded additive "
-            "perturbation to hidden states during PERTURB, then remove for "
-            "REASK (measures true internal-dynamics hysteresis)."
+            "Matched hidden-state noise exposure. Historical prompt/reflection "
+            "runs are not an internal hysteresis protocol."
         ),
     )
     # Default: mid-stack — final-layer perturbations are frequently absorbed
@@ -46,6 +49,13 @@ def add_hysteresis_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--noise-start", type=int, default=3)
     parser.add_argument("--noise-duration", type=int, default=8)
     parser.add_argument("--noise-seed", type=int, default=1234)
+    parser.add_argument(
+        "--recovery-tokens",
+        type=int,
+        default=32,
+        help="Aligned intervention-free decisions for both recovery branches.",
+    )
+    parser.add_argument("--propagation-floor", type=float, default=1e-6)
     add_sampling_args(parser)
     add_seed_sweep_arg(parser)
 
@@ -67,6 +77,8 @@ def _run_one(args, seed: int, backend_result=None):
         noise_start=args.noise_start,
         noise_duration=args.noise_duration,
         noise_seed=args.noise_seed,
+        recovery_tokens=args.recovery_tokens,
+        propagation_floor=args.propagation_floor,
         temperature=float(getattr(args, "temperature", 0.0)),
         top_p=float(getattr(args, "top_p", 1.0)),
         top_k=int(getattr(args, "top_k", 0)),
@@ -94,5 +106,6 @@ def run_from_args(args) -> None:
             "prompt": args.prompt,
             "model": args.model,
             "perturbation_mode": args.perturbation_mode,
+            "recovery_tokens": int(args.recovery_tokens),
         },
     )

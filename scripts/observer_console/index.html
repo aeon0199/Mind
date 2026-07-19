@@ -173,10 +173,9 @@
               <label class="field">
                 <span class="field-label">Mode</span>
                 <select id="f-perturbation-mode">
-                  <option value="prompt">prompt (REFLECTION injection)</option>
-                  <option value="noise">noise (hidden-state injection)</option>
+                  <option value="noise">matched hidden-state exposure</option>
                 </select>
-                <span class="field-hint">'prompt' tests context persistence; 'noise' tests internal dynamics</span>
+                <span class="field-hint">Clean and perturbed branches recover under identical conditions</span>
               </label>
               <label class="field">
                 <span class="field-label">Noise layer</span>
@@ -194,6 +193,10 @@
               <label class="field">
                 <span class="field-label">Noise duration</span>
                 <input id="f-noise-duration" type="number" min="1" value="8" />
+              </label>
+              <label class="field">
+                <span class="field-label">Recovery tokens</span>
+                <input id="f-recovery-tokens" type="number" min="1" value="32" />
               </label>
             </div>
           </div>

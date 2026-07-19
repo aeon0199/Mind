@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
 import random
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -13,82 +12,20 @@ import torch
 from runtime_lab.config.schemas import HysteresisConfig
 from runtime_lab.core.backend.identity import resolved_model_identity
 from runtime_lab.core.backend.loader import load_model_with_backend
-from runtime_lab.core.io.json import save_json
+from runtime_lab.core.interventions.factory import build_intervention
+from runtime_lab.core.io.json import json_safe, save_json
 from runtime_lab.core.io.run_artifacts import create_run_dir, write_config_record
-from runtime_lab.core.model.layers import resolve_transformer_layers
-from runtime_lab.core.runtime.hooks import HiddenCaptureHook
+from runtime_lab.core.model.cache_utils import (
+    cache_sequence_length,
+    compute_cache_fingerprint,
+)
+from runtime_lab.core.runtime.engine import RuntimeEngine, StepResult
+from runtime_lab.core.sampling import logit_jensen_shannon, logit_kl
+from runtime_lab.core.trajectory.generation import (
+    GenerationState,
+    generation_state_from_seed_cache,
+)
 from runtime_lab.stress.seed_cache import build_seed_cache
-
-
-_JS_EPS = 1e-12
-
-
-@dataclass
-class StageTelemetry:
-    text: str
-    stats: Dict[str, Any]
-    kv_cache: Optional[Any] = None
-    seq_len: int = 0
-    context_logits: Optional[torch.Tensor] = None
-
-
-class _TokenwiseNoiseHook:
-    """Forward hook that adds a seeded random direction to the last-token hidden
-    state for a configurable window of generation steps. Magnitude is relative
-    to the current hidden-state norm so the knob is model-agnostic.
-
-    Used by the 'noise' hysteresis perturbation_mode to inject a real
-    hidden-state perturbation during PERTURB that is then removed for REASK.
-    """
-
-    def __init__(self, magnitude: float, start: int, duration: int, seed: int):
-        self.magnitude = float(magnitude)
-        self.start = int(start)
-        self.duration = int(duration)
-        self.seed = int(seed)
-        self._direction: Optional[torch.Tensor] = None
-        self._step = 0
-        self.active_steps: list = []
-
-    def reset(self):
-        self._step = 0
-        self._direction = None
-        self.active_steps = []
-
-    def __call__(self, module, inputs, output):
-        hidden = output[0] if isinstance(output, tuple) else output
-        if not isinstance(hidden, torch.Tensor):
-            return output
-
-        self._step += 1
-        in_window = (self._step >= self.start) and (self._step < self.start + self.duration)
-        if not in_window:
-            return output
-
-        # Skip the large prefill pass (we only want to perturb single-token
-        # generation steps, not the initial prompt forward).
-        if hidden.dim() != 3 or hidden.shape[1] != 1:
-            return output
-
-        if self._direction is None:
-            dim = hidden.shape[-1]
-            g = torch.Generator(device="cpu")
-            g.manual_seed(self.seed)
-            vec = torch.randn(dim, generator=g, device="cpu", dtype=torch.float32)
-            self._direction = vec / (vec.norm() + 1e-12)
-
-        direction = self._direction.to(device=hidden.device, dtype=hidden.dtype)
-        h_last = hidden[:, -1, :]
-        h_norm = h_last.norm(dim=-1, keepdim=True)
-        delta = direction.unsqueeze(0) * (self.magnitude * h_norm)
-
-        new_hidden = hidden.clone()
-        new_hidden[:, -1, :] = h_last + delta
-        self.active_steps.append(int(self._step))
-
-        if isinstance(output, tuple):
-            return (new_hidden, *output[1:])
-        return new_hidden
 
 
 def _set_deterministic_state(seed: Optional[int]) -> None:
@@ -103,335 +40,231 @@ def _set_deterministic_state(seed: Optional[int]) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-def _softmax_np(x: np.ndarray) -> np.ndarray:
-    x = x.astype(np.float64, copy=False)
-    x = x - np.max(x)
-    ex = np.exp(x)
-    return ex / (np.sum(ex) + _JS_EPS)
+def _argmax_token(logits: torch.Tensor) -> int:
+    return int(logits.detach().float().reshape(-1).argmax().item())
 
 
-def js_divergence_from_logits_bits(logits_a: Any, logits_b: Any) -> float:
-    if isinstance(logits_a, torch.Tensor):
-        a = logits_a.detach().float().cpu().numpy().reshape(-1)
-    else:
-        a = np.array(logits_a, dtype=np.float32).reshape(-1)
-
-    if isinstance(logits_b, torch.Tensor):
-        b = logits_b.detach().float().cpu().numpy().reshape(-1)
-    else:
-        b = np.array(logits_b, dtype=np.float32).reshape(-1)
-
-    p = _softmax_np(a)
-    q = _softmax_np(b)
-    m = 0.5 * (p + q)
-
-    kl_pm = float(np.sum(p * (np.log2(p + _JS_EPS) - np.log2(m + _JS_EPS))))
-    kl_qm = float(np.sum(q * (np.log2(q + _JS_EPS) - np.log2(m + _JS_EPS))))
-    return 0.5 * (kl_pm + kl_qm)
-
-
-def _topk_values(logits: torch.Tensor, k: int = 5) -> Dict[str, Any]:
-    x = logits.detach().float().view(-1).cpu()
-    if x.numel() == 0:
-        return {"indices": [], "values": [], "probs": []}
-    k = int(min(max(1, k), x.numel()))
-    values, indices = torch.topk(x, k)
-    probs = torch.softmax(x, dim=-1).gather(0, indices)
-    return {
-        "indices": [int(i) for i in indices.tolist()],
-        "values": [float(v) for v in values.tolist()],
-        "probs": [float(p) for p in probs.tolist()],
-    }
-
-
-def _svd_signature(hidden: torch.Tensor, k: int = 5) -> Dict[str, Any]:
-    if not isinstance(hidden, torch.Tensor):
-        return {"singular_values": []}
-    x = hidden.detach().float().cpu()
-    if x.dim() == 1:
-        x = x.unsqueeze(0)
-    else:
-        x = x.view(1, -1)
-    try:
-        s = torch.linalg.svdvals(x)
-        s = s[: int(min(k, s.numel()))]
-        return {"singular_values": [float(v) for v in s.tolist()]}
-    except Exception as e:
-        return {"singular_values": [], "error": str(e)}
-
-
-def _tensor_norm(x: Optional[torch.Tensor]) -> float:
-    if not isinstance(x, torch.Tensor):
-        return 0.0
-    return float(torch.linalg.vector_norm(x.detach().float()).item())
-
-
-def _tensor_entropy(logits: torch.Tensor) -> float:
-    probs = torch.softmax(logits.detach().float().view(-1), dim=-1)
-    ent = -(probs * (probs + 1e-12).log()).sum()
-    return float(ent.item())
-
-
-def _stage_stats(hidden: torch.Tensor, logits: torch.Tensor) -> Dict[str, Any]:
-    return {
-        "hidden_norm": _tensor_norm(hidden),
-        "logit_norm": _tensor_norm(logits),
-        "entropy": _tensor_entropy(logits),
-        "topk": _topk_values(logits, k=5),
-        "svd": _svd_signature(hidden),
-    }
-
-
-def _greedy_append_tokens(
-    model,
-    tokenizer,
-    device: torch.device,
-    generated_ids: torch.Tensor,
-    past_key_values: Any,
-    next_token_logits: torch.Tensor,
-    max_new_tokens: int,
-    current_seq_len: int,
-    temperature: float = 0.0,
-    top_p: float = 1.0,
-    top_k: int = 0,
-) -> tuple[torch.Tensor, Any, torch.Tensor]:
-    from runtime_lab.core.sampling import sample_token_id
-
-    if max_new_tokens <= 0:
-        return generated_ids, past_key_values, next_token_logits
-
-    last_logits = next_token_logits
-    tok_id = sample_token_id(last_logits, temperature, top_p, top_k)
-    next_token = torch.tensor([[tok_id]], device=device)
-
-    with torch.no_grad():
-        for step in range(int(max_new_tokens)):
-            generated_ids = torch.cat([generated_ids, next_token], dim=-1)
-
-            attention_mask = torch.ones(
-                (1, int(current_seq_len) + step + 1),
-                device=device,
-                dtype=torch.long,
-            )
-            outputs = model(
-                input_ids=next_token,
-                attention_mask=attention_mask,
-                past_key_values=past_key_values,
-                use_cache=True,
-                return_dict=True,
-            )
-            past_key_values = outputs.past_key_values
-            last_logits = outputs.logits[:, -1, :]
-
-            if tokenizer.eos_token_id is not None and int(next_token.item()) == int(tokenizer.eos_token_id):
-                break
-
-            tok_id = sample_token_id(last_logits, temperature, top_p, top_k)
-            next_token = torch.tensor([[tok_id]], device=device)
-
-    return generated_ids, past_key_values, last_logits
-
-
-def _generate_from_seed_cache(
-    model,
-    tokenizer,
-    device: torch.device,
-    capture_hook: HiddenCaptureHook,
-    seed_cache,
-    prefix_text: str = "",
-    max_new_tokens: int = 128,
-    return_kv_cache: bool = False,
-    temperature: float = 0.0,
-    top_p: float = 1.0,
-    top_k: int = 0,
-) -> StageTelemetry:
-    capture_hook.reset()
-
-    generated_ids = seed_cache.input_ids.to(device).clone()
-    past_key_values = seed_cache.past_key_values
-    current_seq_len = int(seed_cache.seq_len)
-
-    if prefix_text:
-        enc = tokenizer(prefix_text, return_tensors="pt", add_special_tokens=False)
-        prefix_ids = enc["input_ids"].to(device)
-        attention_mask = torch.ones(
-            (1, int(current_seq_len) + int(prefix_ids.shape[1])),
-            device=device,
-            dtype=torch.long,
-        )
-        with torch.no_grad():
-            outputs = model(
-                input_ids=prefix_ids,
-                attention_mask=attention_mask,
-                past_key_values=past_key_values,
-                use_cache=True,
-                return_dict=True,
-            )
-        past_key_values = outputs.past_key_values
-        next_token_logits = outputs.logits[:, -1, :]
-        context_logits = next_token_logits.detach().float().cpu()
-        generated_ids = torch.cat([generated_ids, prefix_ids], dim=-1)
-        current_seq_len += int(prefix_ids.shape[1])
-    else:
-        next_token_logits = seed_cache.next_token_logits.to(device)
-        context_logits = seed_cache.next_token_logits.detach().float().cpu()
-
-    generated_ids, past_key_values, last_logits = _greedy_append_tokens(
-        model=model,
-        tokenizer=tokenizer,
-        device=device,
-        generated_ids=generated_ids,
-        past_key_values=past_key_values,
-        next_token_logits=next_token_logits,
-        max_new_tokens=max_new_tokens,
-        current_seq_len=current_seq_len,
-        temperature=temperature,
-        top_p=top_p,
-        top_k=top_k,
+def _hidden_distances(
+    clean_hidden: Optional[torch.Tensor],
+    perturbed_hidden: Optional[torch.Tensor],
+) -> tuple[float | None, float | None]:
+    if not isinstance(clean_hidden, torch.Tensor) or not isinstance(
+        perturbed_hidden,
+        torch.Tensor,
+    ):
+        return None, None
+    clean = clean_hidden.detach().float().reshape(-1)
+    perturbed = perturbed_hidden.detach().float().reshape(-1)
+    if clean.numel() == 0 or clean.numel() != perturbed.numel():
+        return None, None
+    if torch.equal(clean, perturbed):
+        return 0.0, 0.0
+    clean_norm = float(clean.norm().item())
+    perturbed_norm = float(perturbed.norm().item())
+    relative_l2 = float((clean - perturbed).norm().item()) / max(
+        clean_norm,
+        1e-12,
     )
-
-    decoded = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
-    hidden = capture_hook.last_hidden
-    if hidden is None and getattr(seed_cache, "seed_hidden_available", False):
-        hidden = seed_cache.seed_hidden
-    elif hidden is None:
-        hidden = torch.zeros((1, 1), dtype=torch.float32)
-
-    logits = last_logits.detach().float().cpu()
-    stats = _stage_stats(hidden, logits)
-
-    return StageTelemetry(
-        text=decoded,
-        stats=stats,
-        kv_cache=(past_key_values if return_kv_cache else None),
-        seq_len=int(generated_ids.shape[1]),
-        context_logits=context_logits,
+    if clean_norm <= 1e-12 or perturbed_norm <= 1e-12:
+        return None, relative_l2
+    cosine = float(torch.dot(clean, perturbed).item()) / (
+        clean_norm * perturbed_norm
     )
+    cosine = max(-1.0, min(1.0, cosine))
+    return float(1.0 - cosine), relative_l2
 
 
-def _generate_continuation(
-    model,
-    tokenizer,
-    device: torch.device,
-    capture_hook: HiddenCaptureHook,
-    new_prompt: str,
-    prior_kv_cache: Any,
-    prior_seq_len: int,
-    max_new_tokens: int = 128,
-    temperature: float = 0.0,
-    top_p: float = 1.0,
-    top_k: int = 0,
-) -> StageTelemetry:
-    capture_hook.reset()
-
-    enc = tokenizer(new_prompt, return_tensors="pt", add_special_tokens=False)
-    new_input_ids = enc["input_ids"].to(device)
-    current_seq_len = int(prior_seq_len) + int(new_input_ids.shape[1])
-    attention_mask = torch.ones((1, current_seq_len), device=device, dtype=torch.long)
-
-    with torch.no_grad():
-        outputs = model(
-            input_ids=new_input_ids,
-            attention_mask=attention_mask,
-            past_key_values=prior_kv_cache,
-            use_cache=True,
-            return_dict=True,
-        )
-
-    current_cache = outputs.past_key_values
-    next_token_logits = outputs.logits[:, -1, :]
-    context_logits = next_token_logits.detach().float().cpu()
-
-    generated_ids = new_input_ids.clone()
-    generated_ids, current_cache, last_logits = _greedy_append_tokens(
-        model=model,
-        tokenizer=tokenizer,
-        device=device,
-        generated_ids=generated_ids,
-        past_key_values=current_cache,
-        next_token_logits=next_token_logits,
-        max_new_tokens=max_new_tokens,
-        current_seq_len=current_seq_len,
-        temperature=temperature,
-        top_p=top_p,
-        top_k=top_k,
+def _distance_point(
+    *,
+    phase: str,
+    phase_step: int,
+    global_decision_index: int,
+    clean_step: StepResult,
+    perturbed_step: StepResult,
+    intervention_active: bool,
+) -> Dict[str, Any]:
+    hidden_cosine, hidden_l2_relative = _hidden_distances(
+        clean_step.hidden_post,
+        perturbed_step.hidden_post,
     )
-
-    full_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
-    hidden = capture_hook.last_hidden
-    if hidden is None:
-        hidden = torch.zeros((1, 1), dtype=torch.float32)
-    logits = last_logits.detach().float().cpu()
-    stats = _stage_stats(hidden, logits)
-
-    return StageTelemetry(
-        text=full_text,
-        stats=stats,
-        seq_len=int(current_seq_len + max(0, int(generated_ids.shape[1]) - int(new_input_ids.shape[1]))),
-        context_logits=context_logits,
-    )
-
-
-def _telemetry_to_reflection(stats: Dict[str, Any]) -> str:
-    top_sv = None
-    if stats.get("svd") and stats["svd"].get("singular_values"):
-        top_sv = stats["svd"]["singular_values"][0]
-
-    reflection = [
-        "The following is a reflection on your internal reasoning state.",
-        "",
-        "<REFLECTION>",
-        f"Entropy: {stats['entropy']:.6f}",
-        f"Hidden norm: {stats['hidden_norm']:.4f}",
-        f"Logit norm: {stats['logit_norm']:.4f}",
-        f"Top singular values: {top_sv}",
-        "Interpretation:",
-        "- Low entropy means your next-token distribution is very sharp (high confidence).",
-        "- Large jumps in hidden or logit norm between steps indicate strong internal modulation.",
-        "- When re-asking, these values should return close to the original baseline.",
-        "</REFLECTION>",
-        "",
-        "Use this reflection to stabilize your next reasoning step and avoid unnecessary shifts.",
+    js = float(logit_jensen_shannon(clean_step.logits, perturbed_step.logits))
+    kl = float(logit_kl(clean_step.logits, perturbed_step.logits))
+    distance_components = [
+        value
+        for value in (hidden_cosine, hidden_l2_relative, js)
+        if value is not None
     ]
-    return "\n".join(reflection)
-
-
-def _norm_distance(a: float, b: float) -> float:
-    if a < 1e-10 and b < 1e-10:
-        return 0.0
-    return abs(a - b) / (max(a, b) + 1e-10)
-
-
-def _entropy_distance(a: float, b: float) -> float:
-    return abs(a - b)
-
-
-def _svd_distance(svd_a: Dict[str, Any], svd_b: Dict[str, Any]) -> float:
-    sv1 = np.array(svd_a.get("singular_values", []), dtype=np.float64)
-    sv2 = np.array(svd_b.get("singular_values", []), dtype=np.float64)
-    if len(sv1) == 0 or len(sv2) == 0:
-        return 0.0
-    min_len = min(len(sv1), len(sv2))
-    sv1 = sv1[:min_len]
-    sv2 = sv2[:min_len]
-    norm = max(np.linalg.norm(sv1), np.linalg.norm(sv2))
-    if norm < 1e-10:
-        return 0.0
-    return float(np.linalg.norm(sv1 - sv2) / norm)
-
-
-def _compute_component_distances(stats_a: Dict[str, Any], stats_b: Dict[str, Any]) -> Dict[str, float]:
-    d_hidden = _norm_distance(stats_a.get("hidden_norm", 0.0), stats_b.get("hidden_norm", 0.0))
-    d_entropy = _entropy_distance(stats_a.get("entropy", 0.0), stats_b.get("entropy", 0.0))
-    d_logit = _norm_distance(stats_a.get("logit_norm", 0.0), stats_b.get("logit_norm", 0.0))
-    d_svd = _svd_distance(stats_a.get("svd", {}), stats_b.get("svd", {}))
-    composite = (1.0 * d_hidden) + (1.0 * d_entropy) + (0.5 * d_logit) + (1.0 * d_svd)
+    distance = float(max(distance_components, default=0.0))
+    clean_argmax = _argmax_token(clean_step.logits)
+    perturbed_argmax = _argmax_token(perturbed_step.logits)
     return {
-        "hidden": float(d_hidden),
-        "entropy": float(d_entropy),
-        "logit": float(d_logit),
-        "svd": float(d_svd),
-        "composite": float(composite),
+        "phase": phase,
+        "phase_step": int(phase_step),
+        "global_decision_index": int(global_decision_index),
+        "intervention_active": bool(intervention_active),
+        "distance": distance,
+        "hidden_cosine_distance": hidden_cosine,
+        "hidden_l2_relative": hidden_l2_relative,
+        "logit_js": js,
+        "logit_kl": kl,
+        "clean_argmax_token_id": clean_argmax,
+        "perturbed_argmax_token_id": perturbed_argmax,
+        "argmax_flip": bool(clean_argmax != perturbed_argmax),
+        "sampled_flip": bool(
+            clean_step.predicted_next_token_id
+            != perturbed_step.predicted_next_token_id
+        ),
+    }
+
+
+def _trace_record(
+    *,
+    phase: str,
+    branch: str,
+    phase_step: int,
+    global_decision_index: int,
+    context_length: int | None,
+    step: StepResult,
+    intervention_active: bool,
+    paired_distance: float,
+) -> Dict[str, Any]:
+    return {
+        "mode": "hysteresis",
+        "phase": phase,
+        "branch": branch,
+        "phase_step": int(phase_step),
+        "global_decision_index": int(global_decision_index),
+        "context_sequence_length": context_length,
+        "consumed_token_id": int(step.consumed_token_id),
+        "consumed_token_text": step.consumed_token_text,
+        "predicted_next_token_id": int(step.predicted_next_token_id),
+        "argmax_token_id": _argmax_token(step.logits),
+        "hidden_pre_norm": float(step.event.hidden_pre_norm),
+        "hidden_post_norm": float(step.event.hidden_post_norm),
+        "hidden_delta_norm": float(step.event.hidden_delta_norm),
+        "intervention_active": bool(intervention_active),
+        "sampling_rng_paired": True,
+        "paired_distance": float(paired_distance),
+    }
+
+
+def _paired_forward(
+    *,
+    engine: RuntimeEngine,
+    clean_state: GenerationState,
+    perturbed_state: GenerationState,
+    phase: str,
+    phase_step: int,
+    intervention_active: bool,
+) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    if clean_state.next_decision_index != perturbed_state.next_decision_index:
+        raise RuntimeError("paired trajectories lost decision-index alignment")
+    global_decision_index = int(clean_state.next_decision_index)
+    clean_context_length = cache_sequence_length(clean_state.past_key_values)
+    perturbed_context_length = cache_sequence_length(
+        perturbed_state.past_key_values
+    )
+
+    rng_before = torch.random.get_rng_state()
+    clean_step = engine.step(
+        t=global_decision_index,
+        consumed_token_id=int(clean_state.pending_token_id),
+        prompt_len=int(clean_state.prompt_len),
+        past_key_values=clean_state.past_key_values,
+        intervention_active=False,
+        collect_diagnostics=False,
+    )
+    clean_rng_after = torch.random.get_rng_state()
+    torch.random.set_rng_state(rng_before)
+    try:
+        perturbed_step = engine.step(
+            t=global_decision_index,
+            consumed_token_id=int(perturbed_state.pending_token_id),
+            prompt_len=int(perturbed_state.prompt_len),
+            past_key_values=perturbed_state.past_key_values,
+            intervention_active=bool(intervention_active),
+            collect_diagnostics=False,
+        )
+    finally:
+        torch.random.set_rng_state(clean_rng_after)
+
+    distance = _distance_point(
+        phase=phase,
+        phase_step=phase_step,
+        global_decision_index=global_decision_index,
+        clean_step=clean_step,
+        perturbed_step=perturbed_step,
+        intervention_active=intervention_active,
+    )
+    clean_record = _trace_record(
+        phase=phase,
+        branch="clean",
+        phase_step=phase_step,
+        global_decision_index=global_decision_index,
+        context_length=clean_context_length,
+        step=clean_step,
+        intervention_active=False,
+        paired_distance=distance["distance"],
+    )
+    perturbed_record = _trace_record(
+        phase=phase,
+        branch="perturbed",
+        phase_step=phase_step,
+        global_decision_index=global_decision_index,
+        context_length=perturbed_context_length,
+        step=perturbed_step,
+        intervention_active=intervention_active,
+        paired_distance=distance["distance"],
+    )
+    clean_state.advance(clean_step)
+    perturbed_state.advance(perturbed_step)
+    return clean_record, perturbed_record, distance
+
+
+def _pending_is_eos(
+    clean_state: GenerationState,
+    perturbed_state: GenerationState,
+    eos_token_id: int | None,
+) -> bool:
+    if eos_token_id is None:
+        return False
+    return bool(
+        int(clean_state.pending_token_id) == int(eos_token_id)
+        or int(perturbed_state.pending_token_id) == int(eos_token_id)
+    )
+
+
+def _classify_regime(recovery: float) -> str:
+    if recovery > 0.8:
+        return "elastic"
+    if recovery > 0.4:
+        return "partial"
+    if recovery >= 0.0:
+        return "plastic"
+    return "runaway"
+
+
+def _endpoint_frame(
+    *,
+    stage: str,
+    trace: list[Dict[str, Any]],
+    text: str,
+    source: str,
+) -> Dict[str, Any]:
+    endpoint = trace[-1] if trace else {}
+    return {
+        "stage": stage,
+        "compatibility_view": True,
+        "metric_source": source,
+        "token_text": text,
+        "hidden_norm": endpoint.get("hidden_post_norm", 0.0),
+        "intervention_active": endpoint.get("intervention_active", False),
+        "extra": {
+            "note": (
+                "Endpoint compatibility view only. Recovery metrics come from "
+                "the aligned paired distance curves in summary.json."
+            )
+        },
     }
 
 
@@ -441,277 +274,363 @@ def run_hysteresis_experiment(
     runs_dir: Optional[str] = None,
     prebuilt_backend: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    _set_deterministic_state(config.seed)
-
-    if prebuilt_backend is not None:
-        backend_result = prebuilt_backend
-    else:
-        backend_result = load_model_with_backend(
-            model_key=config.model_key,
-            registry_path=registry_path,
-            backend=config.backend,
-            nnsight_remote=config.nnsight_remote,
-            nnsight_device=config.nnsight_device,
+    """Run matched clean/perturbed exposure and intervention-free recovery."""
+    if str(config.perturbation_mode).lower().strip() != "noise":
+        raise ValueError(
+            "Matched internal hysteresis requires perturbation_mode='noise'. "
+            "Historical prompt/reflection runs measure prompt contamination, "
+            "not internal recovery."
         )
+    exposure_steps_requested = int(config.max_new_tokens)
+    recovery_steps_requested = int(config.recovery_tokens)
+    if exposure_steps_requested < 1:
+        raise ValueError("max_new_tokens must be at least 1 exposure step")
+    if recovery_steps_requested < 1:
+        raise ValueError("recovery_tokens must be at least 1")
+    if int(config.noise_start) < 1:
+        raise ValueError("noise_start must be at least 1")
+    if int(config.noise_duration) < 0:
+        raise ValueError("noise_duration must not be negative")
+
+    _set_deterministic_state(config.seed)
+    backend_result = prebuilt_backend or load_model_with_backend(
+        model_key=config.model_key,
+        registry_path=registry_path,
+        backend=config.backend,
+        nnsight_remote=config.nnsight_remote,
+        nnsight_device=config.nnsight_device,
+    )
+    identity = resolved_model_identity(config.model_key, backend_result)
     tokenizer = backend_result.tokenizer
     model = backend_result.model
     device = backend_result.device
-    model_identity = resolved_model_identity(config.model_key, backend_result)
-    model_id = str(model_identity["model"])
 
-    original_question = f"{config.original_question_label}:\n{config.prompt}"
+    seed_cache = build_seed_cache(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        prompt=config.prompt,
+        intervention_layer=int(config.noise_layer),
+    )
+    resolved_layer = int(seed_cache.resolved_layer_idx)
+    intervention = build_intervention(
+        "additive",
+        magnitude=float(config.noise_magnitude),
+        relative=True,
+        seed=int(config.noise_seed),
+    )
+    engine = RuntimeEngine(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        layer_idx=resolved_layer,
+        diagnostics_manager=None,
+        intervention=intervention,
+        probe_layers=[],
+        mode="hysteresis",
+        temperature=float(config.temperature),
+        top_p=float(config.top_p),
+        top_k=int(config.top_k),
+    )
+
+    initial_state = generation_state_from_seed_cache(
+        seed_cache,
+        temperature=float(config.temperature),
+        top_p=float(config.top_p),
+        top_k=int(config.top_k),
+    )
+    clean_state = initial_state.clone()
+    perturbed_state = initial_state.clone()
+    initial_fingerprints = {
+        "source": compute_cache_fingerprint(initial_state.past_key_values),
+        "clean": compute_cache_fingerprint(clean_state.past_key_values),
+        "perturbed": compute_cache_fingerprint(perturbed_state.past_key_values),
+    }
+    initial_contexts_matched = bool(
+        initial_fingerprints["source"] not in {"unavailable", "empty"}
+        and len(set(initial_fingerprints.values())) == 1
+    )
+    if not initial_contexts_matched:
+        engine.close()
+        raise RuntimeError("Could not prove matched initial hysteresis contexts")
+
     run_config = {
         "mode": "hysteresis",
+        "protocol": "matched-exposure-recovery-v2",
         "prompt": config.prompt,
-        "original_question": original_question,
-        **model_identity,
+        **identity,
         "backend": backend_result.backend,
         "backend_meta": dict(backend_result.backend_meta),
-        "max_new_tokens": int(config.max_new_tokens),
         "seed": int(config.seed) if config.seed is not None else None,
-        "original_question_label": str(config.original_question_label),
-        "perturbation_mode": str(getattr(config, "perturbation_mode", "prompt")),
-        "noise_layer": int(getattr(config, "noise_layer", -1)),
-        "noise_magnitude": float(getattr(config, "noise_magnitude", 0.15)),
-        "noise_start": int(getattr(config, "noise_start", 3)),
-        "noise_duration": int(getattr(config, "noise_duration", 8)),
-        "noise_seed": int(getattr(config, "noise_seed", 1234)),
+        "temperature": float(config.temperature),
+        "top_p": float(config.top_p),
+        "top_k": int(config.top_k),
+        "perturbation_mode": "noise",
+        "noise_layer_requested": int(config.noise_layer),
+        "noise_layer_resolved": resolved_layer,
+        "noise_magnitude": float(config.noise_magnitude),
+        "noise_start": int(config.noise_start),
+        "noise_duration": int(config.noise_duration),
+        "noise_seed": int(config.noise_seed),
+        "exposure_steps": exposure_steps_requested,
+        "recovery_tokens": recovery_steps_requested,
+        "propagation_floor": float(config.propagation_floor),
+        "num_layers": int(engine.num_layers),
+        "seed_cache_fingerprint": seed_cache.fingerprint,
+        "prompt_tokens": int(seed_cache.seq_len),
     }
-    layers = resolve_transformer_layers(model)
-    num_layers = len(layers)
-    capture_hook = HiddenCaptureHook()
-    handle = layers[-1].register_forward_hook(capture_hook)
+    run_id, run_dir = create_run_dir(
+        runs_dir or os.environ.get("RUNS_DIR", "runs"),
+        "hysteresis",
+    )
+    config_hash, config_path = write_config_record(run_dir, run_config)
 
-    # Resolve semantic noise_layer ("mid" etc.) against this model's depth.
-    raw_noise_layer = getattr(config, "noise_layer", -1)
-    from runtime_lab.cli._common import resolve_semantic_layer
-
-    resolved_noise_layer = resolve_semantic_layer(raw_noise_layer, num_layers)
-    run_config["noise_layer_resolved"] = int(resolved_noise_layer)
-    run_config["num_layers"] = int(num_layers)
-
-    samp = {
-        "temperature": float(getattr(config, "temperature", 0.0)),
-        "top_p": float(getattr(config, "top_p", 1.0)),
-        "top_k": int(getattr(config, "top_k", 0)),
+    traces: Dict[str, list[Dict[str, Any]]] = {
+        "clean_exposure": [],
+        "perturbed_exposure": [],
+        "clean_recovery": [],
+        "perturbed_recovery": [],
     }
-    run_config.update(samp)
+    exposure_curve: list[Dict[str, Any]] = []
+    recovery_curve: list[Dict[str, Any]] = []
+    eos_token_id = getattr(tokenizer, "eos_token_id", None)
+    eos_truncated_phase: str | None = None
 
     try:
-        seed_cache = build_seed_cache(
-            model=model,
-            tokenizer=tokenizer,
-            device=device,
-            prompt=original_question,
-            intervention_layer=-1,
-        )
-        run_config["seed_cache_fingerprint"] = seed_cache.fingerprint
-        run_config["prompt_tokens"] = int(seed_cache.seq_len)
-        run_id, run_dir = create_run_dir(
-            runs_dir or os.environ.get("RUNS_DIR", "runs"),
-            "hysteresis",
-        )
-        cfg_hash, config_path = write_config_record(run_dir, run_config)
-
-        base = _generate_from_seed_cache(
-            model=model,
-            tokenizer=tokenizer,
-            device=device,
-            capture_hook=capture_hook,
-            seed_cache=seed_cache.clone(),
-            max_new_tokens=int(config.max_new_tokens),
-            **samp,
-        )
-        if base.context_logits is None:
-            raise RuntimeError("Missing BASE context logits")
-
-        perturbation_mode = str(getattr(config, "perturbation_mode", "prompt") or "prompt").lower()
-        noise_handle = None
-        delta = None
-
-        if perturbation_mode == "noise":
-            # Hidden-state perturbation path. Attach a noise-injection forward
-            # hook to the resolved layer (semantic "mid" etc.), remove the
-            # (final-layer) capture hook temporarily, re-register it AFTER the
-            # noise hook — this guarantees the capture sees the post-perturbation
-            # output when noise_layer == -1.
-            noise_layer_idx = int(resolved_noise_layer)
-            if noise_layer_idx < 0:
-                noise_layer_idx = num_layers + noise_layer_idx
-            noise_layer_idx = max(0, min(num_layers - 1, noise_layer_idx))
-
-            noise_hook = _TokenwiseNoiseHook(
-                magnitude=float(getattr(config, "noise_magnitude", 0.15)),
-                start=int(getattr(config, "noise_start", 3)),
-                duration=int(getattr(config, "noise_duration", 8)),
-                seed=int(getattr(config, "noise_seed", 1234)),
+        for phase_step in range(1, exposure_steps_requested + 1):
+            if _pending_is_eos(clean_state, perturbed_state, eos_token_id):
+                eos_truncated_phase = "exposure"
+                break
+            intervention_active = bool(
+                int(config.noise_start)
+                <= phase_step
+                < int(config.noise_start) + int(config.noise_duration)
             )
-            handle.remove()
-            noise_handle = layers[noise_layer_idx].register_forward_hook(noise_hook)
-            handle = layers[-1].register_forward_hook(capture_hook)
-
-            _set_deterministic_state(config.seed)
-            perturb = _generate_from_seed_cache(
-                model=model,
-                tokenizer=tokenizer,
-                device=device,
-                capture_hook=capture_hook,
-                seed_cache=seed_cache.clone(),
-                prefix_text="",
-                max_new_tokens=int(config.max_new_tokens),
-                return_kv_cache=True,
-                **samp,
+            clean_record, perturbed_record, distance = _paired_forward(
+                engine=engine,
+                clean_state=clean_state,
+                perturbed_state=perturbed_state,
+                phase="exposure",
+                phase_step=phase_step,
+                intervention_active=intervention_active,
             )
-            perturb.stats["perturbation_mode"] = "noise"
-            perturb.stats["noise_active_steps"] = list(noise_hook.active_steps)
-            # Remove noise for REASK — perturbation is "off" from here on.
-            noise_handle.remove()
-            noise_handle = None
-        else:
-            delta = _telemetry_to_reflection(base.stats)
-            perturb_prefix = (
-                "\n\n"
-                + delta
-                + "\n\nContinue your reasoning, using the reflection above to stay stable and consistent."
-            )
-            _set_deterministic_state(config.seed)
-            perturb = _generate_from_seed_cache(
-                model=model,
-                tokenizer=tokenizer,
-                device=device,
-                capture_hook=capture_hook,
-                seed_cache=seed_cache.clone(),
-                prefix_text=perturb_prefix,
-                max_new_tokens=int(config.max_new_tokens),
-                return_kv_cache=True,
-                **samp,
-            )
-            perturb.stats["perturbation_mode"] = "prompt"
+            traces["clean_exposure"].append(clean_record)
+            traces["perturbed_exposure"].append(perturbed_record)
+            exposure_curve.append(distance)
 
-        if perturb.context_logits is None:
-            raise RuntimeError("Missing PERTURB context logits")
-        if perturb.kv_cache is None:
-            raise RuntimeError("PERTURB stage did not retain KV cache")
+        clean_exposure_token_ids = list(clean_state.generated_token_ids)
+        perturbed_exposure_token_ids = list(perturbed_state.generated_token_ids)
 
-        reask_prompt = (
-            "Now ignore any reflection/perturbation above and answer ORIGINAL_QUESTION again, accurately."
-        )
-        _set_deterministic_state(config.seed)
-        reask = _generate_continuation(
-            model=model,
-            tokenizer=tokenizer,
-            device=device,
-            capture_hook=capture_hook,
-            new_prompt=reask_prompt,
-            prior_kv_cache=perturb.kv_cache,
-            prior_seq_len=int(perturb.seq_len),
-            max_new_tokens=int(config.max_new_tokens),
-            **samp,
-        )
-        if reask.context_logits is None:
-            raise RuntimeError("Missing REASK context logits")
+        if eos_truncated_phase is None:
+            for phase_step in range(1, recovery_steps_requested + 1):
+                if _pending_is_eos(clean_state, perturbed_state, eos_token_id):
+                    eos_truncated_phase = "recovery"
+                    break
+                clean_record, perturbed_record, distance = _paired_forward(
+                    engine=engine,
+                    clean_state=clean_state,
+                    perturbed_state=perturbed_state,
+                    phase="recovery",
+                    phase_step=phase_step,
+                    intervention_active=False,
+                )
+                traces["clean_recovery"].append(clean_record)
+                traces["perturbed_recovery"].append(perturbed_record)
+                recovery_curve.append(distance)
     finally:
-        handle.remove()
+        engine.close()
 
-    drift = _compute_component_distances(base.stats, perturb.stats)
-    hysteresis = _compute_component_distances(base.stats, reask.stats)
+    exposure_window_complete = bool(
+        int(config.noise_duration) == 0
+        or (
+            len(exposure_curve)
+            >= int(config.noise_start) + int(config.noise_duration)
+        )
+    )
+    matched_exposure = bool(
+        initial_contexts_matched
+        and len(traces["clean_exposure"]) == exposure_steps_requested
+        and len(traces["perturbed_exposure"]) == exposure_steps_requested
+    )
+    matched_recovery = bool(
+        matched_exposure
+        and exposure_window_complete
+        and len(traces["clean_recovery"]) == recovery_steps_requested
+        and len(traces["perturbed_recovery"]) == recovery_steps_requested
+    )
 
-    # TD2 / F9 fix: recovery is CONCEPTUALLY UNDEFINED when the perturbation
-    # didn't propagate (drift ≈ 0). Reporting a numeric ratio in that case
-    # (the old `1 - H/(D+ε)` blows up to ±1000) mixes real recovery signal
-    # with measurement artifacts. Flag and skip.
-    DRIFT_MIN = 0.05
-    perturbation_did_not_propagate = bool(drift["composite"] < DRIFT_MIN)
-
-    if perturbation_did_not_propagate:
+    endpoint_valid = bool(matched_exposure and exposure_window_complete)
+    propagated_distance = (
+        float(exposure_curve[-1]["distance"])
+        if endpoint_valid and exposure_curve
+        else None
+    )
+    direct_effect_peak = max(
+        (
+            float(point["distance"])
+            for point in exposure_curve
+            if point["intervention_active"]
+        ),
+        default=0.0,
+    )
+    exposure_peak = max(
+        (float(point["distance"]) for point in exposure_curve),
+        default=0.0,
+    )
+    residual_distance = (
+        float(recovery_curve[-1]["distance"])
+        if matched_recovery and recovery_curve
+        else None
+    )
+    did_not_propagate = (
+        None
+        if propagated_distance is None
+        else bool(propagated_distance <= float(config.propagation_floor))
+    )
+    if not endpoint_valid or not matched_recovery:
+        recovery = None
+        regime = "invalid"
+    elif did_not_propagate:
         recovery = None
         regime = "no-propagation"
     else:
-        recovery = 1.0 - (hysteresis["composite"] / drift["composite"])
-        if recovery > 0.8:
-            regime = "elastic"
-        elif recovery > 0.4:
-            regime = "partial"
-        elif recovery >= 0:
-            regime = "plastic"
-        else:
-            regime = "runaway"
+        recovery = float(
+            1.0 - float(residual_distance) / float(propagated_distance)
+        )
+        regime = _classify_regime(recovery)
 
-    drift_hidden = abs(base.stats["hidden_norm"] - perturb.stats["hidden_norm"])
-    drift_entropy = abs(base.stats["entropy"] - perturb.stats["entropy"])
-    drift_logit = abs(base.stats["logit_norm"] - perturb.stats["logit_norm"])
+    clean_exposure_text = tokenizer.decode(
+        clean_exposure_token_ids,
+        skip_special_tokens=True,
+    )
+    perturbed_exposure_text = tokenizer.decode(
+        perturbed_exposure_token_ids,
+        skip_special_tokens=True,
+    )
+    clean_recovery_text = tokenizer.decode(
+        clean_state.generated_token_ids,
+        skip_special_tokens=True,
+    )
+    perturbed_recovery_text = tokenizer.decode(
+        perturbed_state.generated_token_ids,
+        skip_special_tokens=True,
+    )
 
-    residual_hidden = abs(base.stats["hidden_norm"] - reask.stats["hidden_norm"])
-    residual_entropy = abs(base.stats["entropy"] - reask.stats["entropy"])
-    residual_logit = abs(base.stats["logit_norm"] - reask.stats["logit_norm"])
-
-    def _recovery_ratio(drift_value: float, residual_value: float) -> float:
-        if drift_value < 1e-9:
-            return 1.0 if residual_value < 1e-9 else 0.0
-        return max(0.0, 1.0 - (residual_value / drift_value))
-
-    recovery_hidden = _recovery_ratio(drift_hidden, residual_hidden)
-    recovery_entropy = _recovery_ratio(drift_entropy, residual_entropy)
-    recovery_logit = _recovery_ratio(drift_logit, residual_logit)
-    avg_recovery = float((recovery_hidden + recovery_entropy + recovery_logit) / 3.0)
-
-    js_base_vs_perturb_ctx = js_divergence_from_logits_bits(base.context_logits, perturb.context_logits)
-    js_base_vs_reask_ctx = js_divergence_from_logits_bits(base.context_logits, reask.context_logits)
-    js_perturb_vs_reask_ctx = js_divergence_from_logits_bits(perturb.context_logits, reask.context_logits)
-
-    frame_base = {
-        "stage": "base",
-        "timestamp": datetime.now().timestamp(),
-        "token_text": base.text,
-        "hidden_norm": base.stats["hidden_norm"],
-        "entropy": base.stats["entropy"],
-        "topk": base.stats["topk"],
-        "svd": base.stats["svd"],
-        "logit_norm": base.stats["logit_norm"],
-        "extra": {
-            "context": "base_ctx_after_original_question",
-            "js_units": "bits",
-        },
+    events_path = Path(run_dir) / "events.jsonl"
+    output_paths = {
+        "output_clean_exposure": Path(run_dir) / "output_clean_exposure.txt",
+        "output_perturbed_exposure": (
+            Path(run_dir) / "output_perturbed_exposure.txt"
+        ),
+        "output_clean_recovery": Path(run_dir) / "output_clean_recovery.txt",
+        "output_perturbed_recovery": (
+            Path(run_dir) / "output_perturbed_recovery.txt"
+        ),
     }
-    frame_perturb = {
-        "stage": "perturb",
-        "timestamp": datetime.now().timestamp(),
-        "token_text": perturb.text,
-        "hidden_norm": perturb.stats["hidden_norm"],
-        "entropy": perturb.stats["entropy"],
-        "topk": perturb.stats["topk"],
-        "svd": perturb.stats["svd"],
-        "logit_norm": perturb.stats["logit_norm"],
-        "extra": {
-            "context": "perturb_ctx_after_delta_prefix",
-            "js_units": "bits",
-            "js_base_vs_perturb_ctx": float(js_base_vs_perturb_ctx),
-        },
-    }
-    frame_reask = {
-        "stage": "reask",
-        "timestamp": datetime.now().timestamp(),
-        "token_text": reask.text,
-        "hidden_norm": reask.stats["hidden_norm"],
-        "entropy": reask.stats["entropy"],
-        "topk": reask.stats["topk"],
-        "svd": reask.stats["svd"],
-        "logit_norm": reask.stats["logit_norm"],
-        "extra": {
-            "context": "reask_ctx_after_reask_instruction",
-            "js_units": "bits",
-            "js_base_vs_reask_ctx": float(js_base_vs_reask_ctx),
-            "js_perturb_vs_reask_ctx": float(js_perturb_vs_reask_ctx),
-        },
-    }
+    with events_path.open("w", encoding="utf-8") as events_file:
+        for phase in ("exposure", "recovery"):
+            for branch in ("clean", "perturbed"):
+                for row in traces[f"{branch}_{phase}"]:
+                    events_file.write(
+                        json.dumps(json_safe(row), ensure_ascii=False) + "\n"
+                    )
+    for key, path in output_paths.items():
+        text = {
+            "output_clean_exposure": clean_exposure_text,
+            "output_perturbed_exposure": perturbed_exposure_text,
+            "output_clean_recovery": clean_recovery_text,
+            "output_perturbed_recovery": perturbed_recovery_text,
+        }[key]
+        path.write_text(config.prompt + text, encoding="utf-8")
 
+    frame_base = _endpoint_frame(
+        stage="base",
+        trace=traces["clean_exposure"],
+        text=clean_exposure_text,
+        source="clean_exposure endpoint",
+    )
+    frame_perturb = _endpoint_frame(
+        stage="perturb",
+        trace=traces["perturbed_exposure"],
+        text=perturbed_exposure_text,
+        source="perturbed_exposure endpoint",
+    )
+    frame_reask = _endpoint_frame(
+        stage="reask",
+        trace=traces["perturbed_recovery"],
+        text=perturbed_recovery_text,
+        source="perturbed_recovery endpoint compatibility alias",
+    )
+    save_json(str(Path(run_dir) / "frame_base.json"), frame_base)
+    save_json(str(Path(run_dir) / "frame_perturb.json"), frame_perturb)
+    save_json(str(Path(run_dir) / "frame_reask.json"), frame_reask)
+    (Path(run_dir) / "output_base.txt").write_text(
+        config.prompt + clean_exposure_text,
+        encoding="utf-8",
+    )
+    (Path(run_dir) / "output_perturb.txt").write_text(
+        config.prompt + perturbed_exposure_text,
+        encoding="utf-8",
+    )
+    (Path(run_dir) / "output_reask.txt").write_text(
+        config.prompt + perturbed_recovery_text,
+        encoding="utf-8",
+    )
+    (Path(run_dir) / "delta.txt").write_text(
+        (
+            "[matched hidden-state perturbation; no prompt delta]\n"
+            f"layer={resolved_layer}\n"
+            f"magnitude={float(config.noise_magnitude)} relative\n"
+            f"start={int(config.noise_start)}\n"
+            f"duration={int(config.noise_duration)}\n"
+            f"seed={int(config.noise_seed)}\n"
+        ),
+        encoding="utf-8",
+    )
+
+    protocol_validity = {
+        "protocol": "matched-exposure-recovery-v2",
+        "initial_contexts_matched": initial_contexts_matched,
+        "initial_context_fingerprints": initial_fingerprints,
+        "matched_exposure": matched_exposure,
+        "matched_recovery": matched_recovery,
+        "equal_phase_instructions": True,
+        "recovery_instruction": None,
+        "intervention_disabled_during_recovery": all(
+            not row["intervention_active"]
+            for key in ("clean_recovery", "perturbed_recovery")
+            for row in traces[key]
+        ),
+        "exposure_window_complete": exposure_window_complete,
+        "clean_exposure_steps": len(traces["clean_exposure"]),
+        "perturbed_exposure_steps": len(traces["perturbed_exposure"]),
+        "clean_recovery_steps": len(traces["clean_recovery"]),
+        "perturbed_recovery_steps": len(traces["perturbed_recovery"]),
+        "requested_exposure_steps": exposure_steps_requested,
+        "requested_recovery_steps": recovery_steps_requested,
+        "eos_truncated_phase": eos_truncated_phase,
+    }
+    metrics = {
+        "drift": propagated_distance,
+        "hysteresis": residual_distance,
+        "recovery": recovery,
+        "regime": regime,
+        "direct_effect_peak": direct_effect_peak,
+        "exposure_peak_distance": exposure_peak,
+        "propagated_distance": propagated_distance,
+        "residual_distance": residual_distance,
+        "perturbation_did_not_propagate": did_not_propagate,
+        "propagation_floor": float(config.propagation_floor),
+        "distance_curve_exposure": exposure_curve,
+        "distance_curve_recovery": recovery_curve,
+    }
+    summary_path = Path(run_dir) / "summary.json"
     summary = {
-        "config_hash": cfg_hash,
+        "config_hash": config_hash,
         "mode": "hysteresis",
         "run_id": run_id,
-        "timestamp": datetime.now().isoformat(),
         "run_dir": str(run_dir),
-        "model_id": model_id,
+        "model_id": identity["model"],
         "backend": backend_result.backend,
         "runtime": {
             "device": str(device),
@@ -720,56 +639,29 @@ def run_hysteresis_experiment(
             "backend_meta": dict(backend_result.backend_meta),
         },
         "config": run_config,
-        "continuous_run": True,
         "seed_cache": {
             "seq_len": int(seed_cache.seq_len),
             "fingerprint": seed_cache.fingerprint,
-            "fingerprint_available": bool(seed_cache.fingerprint != "unavailable"),
+            "fingerprint_available": bool(
+                seed_cache.fingerprint not in {"unavailable", "empty"}
+            ),
         },
-        "distribution_shift": {
-            "js_units": "bits",
-            "js_base_vs_perturb_ctx": float(js_base_vs_perturb_ctx),
-            "js_base_vs_reask_ctx": float(js_base_vs_reask_ctx),
-            "js_perturb_vs_reask_ctx": float(js_perturb_vs_reask_ctx),
-        },
-        "metrics": {
-            "drift": float(drift["composite"]),
-            "hysteresis": float(hysteresis["composite"]),
-            "recovery": (None if recovery is None else float(recovery)),
-            "regime": regime,
-            "perturbation_did_not_propagate": bool(perturbation_did_not_propagate),
-            "drift_min_threshold": float(DRIFT_MIN),
-            "components": {
-                "drift": drift,
-                "hysteresis": hysteresis,
-            },
-        },
-        "recovery_analysis": {
-            "drift": {
-                "hidden": float(drift_hidden),
-                "entropy": float(drift_entropy),
-                "logit": float(drift_logit),
-            },
-            "residual": {
-                "hidden": float(residual_hidden),
-                "entropy": float(residual_entropy),
-                "logit": float(residual_logit),
-            },
-            "recovery_ratio": {
-                "hidden": float(recovery_hidden),
-                "entropy": float(recovery_entropy),
-                "logit": float(recovery_logit),
-                "average": float(avg_recovery),
-            },
-        },
+        "protocol_validity": protocol_validity,
+        "metrics": metrics,
+        "traces": traces,
+        "clean_token_ids": list(clean_state.generated_token_ids),
+        "perturbed_token_ids": list(perturbed_state.generated_token_ids),
         "telemetry": {
-            "base": base.stats,
-            "perturb": perturb.stats,
-            "reask": reask.stats,
+            "base": frame_base,
+            "perturb": frame_perturb,
+            "reask": frame_reask,
         },
         "artifacts": {
             "run_dir": str(run_dir),
             "config_path": str(config_path),
+            "events_path": str(events_path),
+            "summary_path": str(summary_path),
+            **{key: str(path) for key, path in output_paths.items()},
             "frame_base": str(Path(run_dir) / "frame_base.json"),
             "frame_perturb": str(Path(run_dir) / "frame_perturb.json"),
             "frame_reask": str(Path(run_dir) / "frame_reask.json"),
@@ -777,45 +669,13 @@ def run_hysteresis_experiment(
             "output_perturb": str(Path(run_dir) / "output_perturb.txt"),
             "output_reask": str(Path(run_dir) / "output_reask.txt"),
             "delta": str(Path(run_dir) / "delta.txt"),
-            "summary": str(Path(run_dir) / "summary.json"),
         },
     }
-
-    save_json(str(Path(run_dir) / "frame_base.json"), frame_base)
-    save_json(str(Path(run_dir) / "frame_perturb.json"), frame_perturb)
-    save_json(str(Path(run_dir) / "frame_reask.json"), frame_reask)
-    with open(Path(run_dir) / "output_base.txt", "w", encoding="utf-8") as f:
-        f.write(base.text)
-    with open(Path(run_dir) / "output_perturb.txt", "w", encoding="utf-8") as f:
-        f.write(perturb.text)
-    with open(Path(run_dir) / "output_reask.txt", "w", encoding="utf-8") as f:
-        f.write(reask.text)
-    with open(Path(run_dir) / "delta.txt", "w", encoding="utf-8") as f:
-        if delta is not None:
-            f.write(delta)
-        else:
-            f.write(
-                "[noise perturbation mode — no prompt delta.\n"
-                f" hook_layer={getattr(config, 'noise_layer', -1)}"
-                f" magnitude={getattr(config, 'noise_magnitude', 0.15)} (relative)"
-                f" start={getattr(config, 'noise_start', 3)}"
-                f" duration={getattr(config, 'noise_duration', 8)}"
-                f" seed={getattr(config, 'noise_seed', 1234)}]"
-            )
     try:
-        from runtime_lab.core.advisory import analyze as _analyze_advisory
-        summary["advisory"] = _analyze_advisory("hysteresis", summary)
-    except Exception as e:
-        summary["advisory"] = {"error": f"advisory failed: {e}"}
+        from runtime_lab.core.advisory import analyze as analyze_advisory
 
-    save_json(str(Path(run_dir) / "summary.json"), summary)
-
-    print(f"[Runtime Lab][hysteresis] Run dir: {run_dir}")
-    print(f"[Runtime Lab][hysteresis] Config hash: {cfg_hash}")
-    print(f"[Runtime Lab][hysteresis] Regime: {regime}")
-    print(
-        "[Runtime Lab][hysteresis] Recovery ratios:"
-        f" hidden={recovery_hidden:.1%} entropy={recovery_entropy:.1%} logit={recovery_logit:.1%}"
-    )
-
+        summary["advisory"] = analyze_advisory("hysteresis", summary)
+    except Exception as error:
+        summary["advisory"] = {"error": f"advisory failed: {error}"}
+    save_json(str(summary_path), summary)
     return summary

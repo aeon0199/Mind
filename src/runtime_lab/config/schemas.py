@@ -64,18 +64,17 @@ class BranchpointConfig(CommonRunConfig):
 @dataclass
 class HysteresisConfig(CommonRunConfig):
     original_question_label: str = "ORIGINAL_QUESTION"
-    # Perturbation class. "prompt" (default, legacy) injects a synthetic
-    # <REFLECTION> block into the context — this measures *prompt
-    # contamination persistence*, not internal dynamics. "noise" instead
-    # injects a seeded additive perturbation onto hidden states for a
-    # configurable window during PERTURB, then removes it for REASK —
-    # this is the actual "internal hysteresis" question.
-    perturbation_mode: str = "prompt"
+    # The foundation protocol uses matched clean/perturbed hidden-state
+    # trajectories. Historical prompt-contamination runs are not accepted as
+    # internal hysteresis evidence.
+    perturbation_mode: str = "noise"
     noise_layer: int = -1
     noise_magnitude: float = 0.15  # relative to hidden norm
     noise_start: int = 3
     noise_duration: int = 8
     noise_seed: int = 1234
+    recovery_tokens: int = 32
+    propagation_floor: float = 1e-6
 
 
 @dataclass

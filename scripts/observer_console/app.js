@@ -1143,6 +1143,7 @@ function applyConfigToForm(mode, cfg) {
     setInputValue('#f-noise-magnitude', cfg.noise_magnitude);
     setInputValue('#f-noise-start', cfg.noise_start);
     setInputValue('#f-noise-duration', cfg.noise_duration);
+    setInputValue('#f-recovery-tokens', cfg.recovery_tokens);
   }
   if (mode === 'control') {
     setInputValue('#f-measure-layer', cfg.measure_layer);
@@ -1309,6 +1310,7 @@ function buildPayload() {
     payload.noise_magnitude = parseFloat($('#f-noise-magnitude').value);
     payload.noise_start = parseInt($('#f-noise-start').value, 10);
     payload.noise_duration = parseInt($('#f-noise-duration').value, 10);
+    payload.recovery_tokens = parseInt($('#f-recovery-tokens').value, 10);
   }
   if (state.mode === 'control') {
     payload.measure_layer = parseInt($('#f-measure-layer').value, 10);

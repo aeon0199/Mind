@@ -26,7 +26,26 @@ class GenerationState:
     def fork_cache(self) -> Any:
         return clone_past_key_values(self.past_key_values)
 
-    def advance_clean(self, step: StepResult) -> None:
+    def clone(self) -> "GenerationState":
+        return GenerationState(
+            prompt_len=int(self.prompt_len),
+            past_key_values=self.fork_cache(),
+            pending_token_id=int(self.pending_token_id),
+            generated_token_ids=list(self.generated_token_ids),
+            next_decision_index=int(self.next_decision_index),
+            last_hidden=(
+                self.last_hidden.clone()
+                if isinstance(self.last_hidden, torch.Tensor)
+                else None
+            ),
+            last_logits=(
+                self.last_logits.clone()
+                if isinstance(self.last_logits, torch.Tensor)
+                else None
+            ),
+        )
+
+    def advance(self, step: StepResult) -> None:
         self.past_key_values = step.past_key_values
         self.pending_token_id = int(step.predicted_next_token_id)
         self.generated_token_ids.append(int(step.predicted_next_token_id))
@@ -37,6 +56,9 @@ class GenerationState:
             else None
         )
         self.last_logits = step.logits.detach().cpu()
+
+    def advance_clean(self, step: StepResult) -> None:
+        self.advance(step)
 
 
 def generation_state_from_seed_cache(
