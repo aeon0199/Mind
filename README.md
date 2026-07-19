@@ -74,7 +74,7 @@ This is the thing that makes intervention comparisons actually mean something. W
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 ```bash
@@ -105,7 +105,7 @@ python -m runtime_lab.cli.main control \
 ## Advanced Modes
 
 ```bash
-pip install -r requirements-optional.txt
+python -m pip install -e ".[research]"
 ```
 
 ```bash

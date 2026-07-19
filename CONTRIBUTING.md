@@ -5,13 +5,13 @@
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 Optional research extras:
 
 ```bash
-pip install -r requirements-optional.txt
+python -m pip install -e ".[research]"
 ```
 
 ## Pull Request Guidelines
@@ -45,7 +45,7 @@ These match what CI runs:
 python -m compileall -q src scripts
 
 # Run the test suite
-python -m unittest discover -s tests
+python -m pytest -q
 ```
 
 The test suite is small but guards against drift — CLI semantic-layer parsing,
