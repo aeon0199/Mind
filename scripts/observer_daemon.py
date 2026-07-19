@@ -94,10 +94,10 @@ def _build_config_observe(cfg: Dict[str, Any]):
     )
 
 
-def _build_config_stress(cfg: Dict[str, Any]):
+def _build_config_stress(cfg: Dict[str, Any], num_layers: int):
     from runtime_lab.config.schemas import StressConfig
     from runtime_lab.cli._common import resolve_semantic_layer
-    layer = resolve_semantic_layer(cfg.get("layer", "mid"), None)
+    layer = resolve_semantic_layer(cfg.get("layer", "mid"), num_layers)
     return StressConfig(
         prompt=cfg["prompt"],
         model_key=cfg.get("model", cfg.get("model_key")),
@@ -120,7 +120,7 @@ def _build_config_stress(cfg: Dict[str, Any]):
     )
 
 
-def _build_config_hysteresis(cfg: Dict[str, Any]):
+def _build_config_hysteresis(cfg: Dict[str, Any], num_layers: int):
     from runtime_lab.config.schemas import HysteresisConfig
     from runtime_lab.cli._common import resolve_semantic_layer
     return HysteresisConfig(
@@ -133,7 +133,7 @@ def _build_config_hysteresis(cfg: Dict[str, Any]):
         backend=cfg.get("backend", "hf"),
         seed=_int_with_default(cfg.get("seed"), 42),
         perturbation_mode=str(cfg.get("perturbation_mode", "prompt")),
-        noise_layer=resolve_semantic_layer(cfg.get("noise_layer", "mid"), None),
+        noise_layer=resolve_semantic_layer(cfg.get("noise_layer", "mid"), num_layers),
         noise_magnitude=float(cfg.get("noise_magnitude", 0.15)),
         noise_start=int(cfg.get("noise_start", 3)),
         noise_duration=int(cfg.get("noise_duration", 8)),
@@ -144,8 +144,15 @@ def _build_config_hysteresis(cfg: Dict[str, Any]):
     )
 
 
-def _build_config_control(cfg: Dict[str, Any]):
+def _build_config_control(cfg: Dict[str, Any], num_layers: int | None = None):
     from runtime_lab.config.schemas import ControlConfig
+    from runtime_lab.cli._common import resolve_semantic_layer
+
+    measure_layer = cfg.get("measure_layer", -1)
+    act_layer = cfg.get("act_layer", -1)
+    if num_layers is not None:
+        measure_layer = resolve_semantic_layer(measure_layer, num_layers)
+        act_layer = resolve_semantic_layer(act_layer, num_layers)
     return ControlConfig(
         prompt=cfg["prompt"],
         model_key=cfg.get("model", cfg.get("model_key")),
@@ -155,8 +162,8 @@ def _build_config_control(cfg: Dict[str, Any]):
         ),
         backend=cfg.get("backend", "hf"),
         seed=_int_with_default(cfg.get("seed"), 42),
-        measure_layer=int(cfg.get("measure_layer", -1)),
-        act_layer=int(cfg.get("act_layer", -1)),
+        measure_layer=int(measure_layer),
+        act_layer=int(act_layer),
         intervention_type=str(cfg.get("intervention_type", "scaling")),
         additive_warn_magnitude=float(cfg.get("additive_warn_magnitude", 0.3)),
         additive_crit_magnitude=float(cfg.get("additive_crit_magnitude", 0.6)),
@@ -181,17 +188,20 @@ def _build_config_control(cfg: Dict[str, Any]):
 
 
 def _run_request(request: Dict[str, Any], backend) -> Dict[str, Any]:
+    from runtime_lab.cli._common import backend_num_layers
+
     mode = str(request.get("mode") or "").lower()
     registry_path = request.get("registry_path", "models.json")
     runs_dir = request.get("runs_dir")
     cfg_values = _merged_request_config(request)
+    num_layers = backend_num_layers(backend)
 
     if mode == "observe":
         from runtime_lab.observe.runner import run_observe_experiment
         from runtime_lab.config.schemas import DiagnosticsConfig
         from runtime_lab.cli._common import resolve_probe_layers
         cfg = _build_config_observe(cfg_values)
-        probe_layers = resolve_probe_layers(cfg_values.get("probe_layers", "auto"), None)
+        probe_layers = resolve_probe_layers(cfg_values.get("probe_layers", "auto"), num_layers)
         diag = DiagnosticsConfig(enabled=True, probe_layers=probe_layers)
         summary = run_observe_experiment(
             config=cfg, registry_path=registry_path, runs_dir=runs_dir,
@@ -203,8 +213,8 @@ def _run_request(request: Dict[str, Any], backend) -> Dict[str, Any]:
         from runtime_lab.stress.experiment import run_stress_experiment
         from runtime_lab.config.schemas import DiagnosticsConfig
         from runtime_lab.cli._common import resolve_probe_layers
-        cfg = _build_config_stress(cfg_values)
-        probe_layers = resolve_probe_layers(cfg_values.get("probe_layers", "auto"), None)
+        cfg = _build_config_stress(cfg_values, num_layers)
+        probe_layers = resolve_probe_layers(cfg_values.get("probe_layers", "auto"), num_layers)
         if int(cfg.intervention_layer) not in probe_layers:
             probe_layers = [int(cfg.intervention_layer), *probe_layers]
         diag = DiagnosticsConfig(enabled=True, probe_layers=probe_layers)
@@ -216,7 +226,7 @@ def _run_request(request: Dict[str, Any], backend) -> Dict[str, Any]:
 
     if mode == "hysteresis":
         from runtime_lab.hysteresis.runner import run_hysteresis_experiment
-        cfg = _build_config_hysteresis(cfg_values)
+        cfg = _build_config_hysteresis(cfg_values, num_layers)
         summary = run_hysteresis_experiment(
             config=cfg, registry_path=registry_path, runs_dir=runs_dir,
             prebuilt_backend=backend,
@@ -227,8 +237,8 @@ def _run_request(request: Dict[str, Any], backend) -> Dict[str, Any]:
         from runtime_lab.control.adaptive_runner import run_control_experiment
         from runtime_lab.config.schemas import DiagnosticsConfig
         from runtime_lab.cli._common import resolve_probe_layers
-        cfg = _build_config_control(cfg_values)
-        probe_layers = resolve_probe_layers(cfg_values.get("probe_layers", "auto"), None)
+        cfg = _build_config_control(cfg_values, num_layers)
+        probe_layers = resolve_probe_layers(cfg_values.get("probe_layers", "auto"), num_layers)
         if int(cfg.measure_layer) not in probe_layers:
             probe_layers = [int(cfg.measure_layer), *probe_layers]
         diag = DiagnosticsConfig(enabled=True, probe_layers=probe_layers)

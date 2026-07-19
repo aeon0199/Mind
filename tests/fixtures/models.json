@@ -1,0 +1,10 @@
+{
+  "default_model": "audit-tiny",
+  "models": {
+    "audit-tiny": {
+      "hf_id": "hf-internal-testing/tiny-random-gpt2",
+      "device": "cpu",
+      "dtype": "float32"
+    }
+  }
+}

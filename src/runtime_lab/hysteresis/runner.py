@@ -484,11 +484,9 @@ def run_hysteresis_experiment(
 
     # Resolve semantic noise_layer ("mid" etc.) against this model's depth.
     raw_noise_layer = getattr(config, "noise_layer", -1)
-    try:
-        from runtime_lab.cli._common import resolve_semantic_layer
-        resolved_noise_layer = resolve_semantic_layer(raw_noise_layer, num_layers)
-    except Exception:
-        resolved_noise_layer = int(raw_noise_layer) if isinstance(raw_noise_layer, int) else num_layers // 2 - 1
+    from runtime_lab.cli._common import resolve_semantic_layer
+
+    resolved_noise_layer = resolve_semantic_layer(raw_noise_layer, num_layers)
     run_config["noise_layer_resolved"] = int(resolved_noise_layer)
     run_config["num_layers"] = int(num_layers)
 

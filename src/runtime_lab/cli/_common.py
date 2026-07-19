@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import argparse
 import re
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 
 SEMANTIC_LAYER_ALIASES = {"mid", "mid-", "mid+", "late", "early", "auto"}
@@ -80,48 +80,78 @@ def parse_seeds(spec: Optional[str]) -> List[int]:
 
 
 def resolve_semantic_layer(spec: Union[str, int], num_layers: Optional[int]) -> int:
-    """Resolve a single layer spec. Accepts ints (passed through), negative
-    indices (passed through), or semantic strings. If num_layers is None we
-    defer with a best-effort fallback."""
+    """Resolve one layer to a validated, non-negative model index."""
+    if num_layers is None:
+        raise ValueError("num_layers is required to resolve a layer")
+    n = int(num_layers)
+    if n <= 0:
+        raise ValueError(f"num_layers must be positive, got {n}")
+
     if isinstance(spec, int):
-        return int(spec)
+        idx = int(spec)
+        if idx < 0:
+            idx += n
+        if not 0 <= idx < n:
+            raise ValueError(f"layer {spec!r} is out of range for num_layers={n}")
+        return idx
+
     s = str(spec).strip().lower()
     if s == "" or s.lstrip("-").isdigit():
-        return int(s)
-    if num_layers is None:
-        # Fallback using negative indexing so the backend can still resolve.
-        return {
-            "mid": -14, "mid-": -16, "mid+": -12,
-            "late": -1, "early": -22, "auto": -14,
-        }.get(s, -1)
-    n = int(num_layers)
-    return {
+        return resolve_semantic_layer(int(s), n)
+    mapping = {
         "mid":   max(0, n // 2 - 1),
         "mid-":  max(0, n // 2 - 3),
         "mid+":  min(n - 1, n // 2 + 1),
         "late":  n - 1,
         "early": max(0, n // 4 - 1),
         "auto":  max(0, n // 2 - 1),
-    }.get(s, n - 1)
+    }
+    if s not in mapping:
+        raise ValueError(
+            f"unknown layer specification {spec!r}; expected an integer or "
+            f"one of {sorted(SEMANTIC_LAYER_ALIASES)}"
+        )
+    return mapping[s]
 
 
 def resolve_probe_layers(spec: str, num_layers: Optional[int]) -> List[int]:
     """Resolve the --probe-layers argument against a concrete layer count.
 
-    Callers that don't yet know num_layers should pass None and defer to
-    runtime. For 'auto', we return a small default set using negative
-    indices so the backend can apply them without knowing depth."""
+    Every result is a validated, non-negative model index."""
+    if num_layers is None:
+        raise ValueError("num_layers is required to resolve probe layers")
+    n = int(num_layers)
+    if n <= 0:
+        raise ValueError(f"num_layers must be positive, got {n}")
+
     spec = (spec or "").strip()
     if spec == "" or spec.lower() == "auto":
-        if num_layers is None:
-            # Sensible defaults with negative indexing. For a 28-layer model
-            # these map to depths ~25/50/75/~100%; for small models some may
-            # collide, which the probe handles.
-            return [-1, -7, -14, -21]
-        n = int(num_layers)
         return sorted({max(0, n // 4 - 1), max(0, n // 2 - 1), max(0, 3 * n // 4 - 1), n - 1})
     parts = [p.strip() for p in spec.split(",") if p.strip()]
-    return [int(p) for p in parts]
+    resolved = [resolve_semantic_layer(int(part), n) for part in parts]
+    return list(dict.fromkeys(resolved))
+
+
+def backend_num_layers(backend_result: Any) -> int:
+    from runtime_lab.core.model.layers import resolve_transformer_layers
+
+    layers = resolve_transformer_layers(backend_result.model)
+    num_layers = int(len(layers))
+    if num_layers <= 0:
+        raise ValueError("loaded backend exposes no transformer layers")
+    return num_layers
+
+
+def load_backend_from_args(args: Any):
+    from runtime_lab.core.backend.loader import load_model_with_backend
+
+    return load_model_with_backend(
+        model_key=getattr(args, "model", None),
+        registry_path=getattr(args, "registry_path", "models.json"),
+        backend=getattr(args, "backend", "hf"),
+        nnsight_remote=bool(getattr(args, "nnsight_remote", False)),
+        nnsight_device=getattr(args, "nnsight_device", None),
+    )
 
 
 def describe_layer_resolution(raw: Union[str, int], resolved: int, num_layers: Optional[int]) -> str:

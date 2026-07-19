@@ -8,8 +8,11 @@ from ._common import (
     add_probe_layers_arg,
     add_sampling_args,
     add_seed_sweep_arg,
+    backend_num_layers,
+    load_backend_from_args,
     parse_seeds,
     resolve_probe_layers,
+    resolve_semantic_layer,
 )
 from ._sweep import run_sweep
 
@@ -87,7 +90,11 @@ def add_control_args(parser: argparse.ArgumentParser) -> None:
     add_seed_sweep_arg(parser)
 
 
-def _run_one(args, seed: int):
+def _run_one(args, seed: int, backend_result=None):
+    backend_result = backend_result or load_backend_from_args(args)
+    num_layers = backend_num_layers(backend_result)
+    measure_layer = resolve_semantic_layer(args.measure_layer, num_layers)
+    act_layer = resolve_semantic_layer(args.act_layer, num_layers)
     cfg = ControlConfig(
         prompt=args.prompt,
         model_key=args.model,
@@ -96,8 +103,8 @@ def _run_one(args, seed: int):
         nnsight_remote=args.nnsight_remote,
         nnsight_device=args.nnsight_device,
         seed=seed,
-        measure_layer=args.measure_layer,
-        act_layer=args.act_layer,
+        measure_layer=measure_layer,
+        act_layer=act_layer,
         intervention_type=args.type,
         additive_warn_magnitude=float(getattr(args, "additive_warn_magnitude", 0.3)),
         additive_crit_magnitude=float(getattr(args, "additive_crit_magnitude", 0.6)),
@@ -120,15 +127,19 @@ def _run_one(args, seed: int):
         top_k=int(getattr(args, "top_k", 0)),
     )
 
-    probe_layers = resolve_probe_layers(args.probe_layers, None)
-    if int(args.measure_layer) not in probe_layers:
-        probe_layers = [int(args.measure_layer), *probe_layers]
+    probe_layers = resolve_probe_layers(args.probe_layers, num_layers)
+    if measure_layer not in probe_layers:
+        probe_layers = [measure_layer, *probe_layers]
 
     diag_cfg = DiagnosticsConfig(enabled=True, probe_layers=probe_layers)
 
     intervention_kwargs = {}
     if args.type == "sae":
-        resolved_layer = args.sae_layer if args.sae_layer is not None else args.act_layer
+        resolved_layer = (
+            resolve_semantic_layer(args.sae_layer, num_layers)
+            if args.sae_layer is not None
+            else act_layer
+        )
         intervention_kwargs = {
             "repo_id": args.sae_repo,
             "sae_id": args.sae_id,
@@ -147,24 +158,33 @@ def _run_one(args, seed: int):
         diagnostics_config=diag_cfg,
         intervention_kwargs=intervention_kwargs,
         generate_dashboard_html=not args.no_dashboard,
+        prebuilt_backend=backend_result,
     )
 
 
 def run_from_args(args) -> None:
+    backend_result = load_backend_from_args(args)
+    num_layers = backend_num_layers(backend_result)
     seeds = parse_seeds(getattr(args, "seeds", None))
     if not seeds:
-        _run_one(args, int(args.seed))
+        _run_one(args, int(args.seed), backend_result)
         return
     run_sweep(
         mode="control",
         seeds=seeds,
         runs_dir=args.runs_dir,
-        run_once=lambda s: _run_one(args, s),
+        run_once=lambda s: _run_one(args, s, backend_result),
         describe={
             "prompt": args.prompt,
             "model": args.model,
-            "measure_layer": int(args.measure_layer),
-            "act_layer": int(args.act_layer),
+            "measure_layer": {
+                "raw": int(args.measure_layer),
+                "resolved": resolve_semantic_layer(args.measure_layer, num_layers),
+            },
+            "act_layer": {
+                "raw": int(args.act_layer),
+                "resolved": resolve_semantic_layer(args.act_layer, num_layers),
+            },
             "type": args.type,
             "additive_warn_magnitude": float(getattr(args, "additive_warn_magnitude", 0.3)),
             "additive_crit_magnitude": float(getattr(args, "additive_crit_magnitude", 0.6)),

@@ -8,6 +8,8 @@ from ._common import (
     add_probe_layers_arg,
     add_sampling_args,
     add_seed_sweep_arg,
+    backend_num_layers,
+    load_backend_from_args,
     parse_seeds,
     resolve_probe_layers,
     resolve_semantic_layer,
@@ -52,8 +54,10 @@ def add_stress_args(parser: argparse.ArgumentParser) -> None:
     add_seed_sweep_arg(parser)
 
 
-def _run_one(args, seed: int):
-    resolved_layer = resolve_semantic_layer(args.layer, None)
+def _run_one(args, seed: int, backend_result=None):
+    backend_result = backend_result or load_backend_from_args(args)
+    num_layers = backend_num_layers(backend_result)
+    resolved_layer = resolve_semantic_layer(args.layer, num_layers)
 
     cfg = StressConfig(
         prompt=args.prompt,
@@ -75,7 +79,7 @@ def _run_one(args, seed: int):
         top_k=int(getattr(args, "top_k", 0)),
     )
 
-    probe_layers = resolve_probe_layers(args.probe_layers, None)
+    probe_layers = resolve_probe_layers(args.probe_layers, num_layers)
     # Make sure the intervention layer is covered so the delta shows up.
     if int(resolved_layer) not in probe_layers:
         probe_layers = [int(resolved_layer), *probe_layers]
@@ -87,7 +91,11 @@ def _run_one(args, seed: int):
 
     intervention_kwargs = {}
     if args.type == "sae":
-        sae_layer = args.sae_layer if args.sae_layer is not None else resolved_layer
+        sae_layer = (
+            resolve_semantic_layer(args.sae_layer, num_layers)
+            if args.sae_layer is not None
+            else resolved_layer
+        )
         intervention_kwargs = {
             "repo_id": args.sae_repo,
             "sae_id": args.sae_id,
@@ -105,19 +113,22 @@ def _run_one(args, seed: int):
         runs_dir=args.runs_dir,
         diagnostics_config=diag_cfg,
         intervention_kwargs=intervention_kwargs,
+        prebuilt_backend=backend_result,
     )
 
 
 def run_from_args(args) -> None:
+    backend_result = load_backend_from_args(args)
+    num_layers = backend_num_layers(backend_result)
     seeds = parse_seeds(getattr(args, "seeds", None))
     if not seeds:
-        _run_one(args, int(args.seed))
+        _run_one(args, int(args.seed), backend_result)
         return
     run_sweep(
         mode="stress",
         seeds=seeds,
         runs_dir=args.runs_dir,
-        run_once=lambda s: _run_one(args, s),
+        run_once=lambda s: _run_one(args, s, backend_result),
         describe={
             "prompt": args.prompt,
             "model": args.model,
@@ -125,7 +136,7 @@ def run_from_args(args) -> None:
             # (possibly "mid"), resolved is the int actually used.
             "layer": {
                 "raw": args.layer,
-                "resolved": resolve_semantic_layer(args.layer, None),
+                "resolved": resolve_semantic_layer(args.layer, num_layers),
             },
             "type": args.type,
             "magnitude": float(args.magnitude),

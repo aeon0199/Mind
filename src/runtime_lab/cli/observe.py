@@ -8,6 +8,8 @@ from ._common import (
     add_probe_layers_arg,
     add_sampling_args,
     add_seed_sweep_arg,
+    backend_num_layers,
+    load_backend_from_args,
     parse_seeds,
     resolve_probe_layers,
 )
@@ -29,7 +31,9 @@ def add_observe_args(parser: argparse.ArgumentParser) -> None:
     add_seed_sweep_arg(parser)
 
 
-def _run_one(args, seed: int) -> dict:
+def _run_one(args, seed: int, backend_result=None) -> dict:
+    backend_result = backend_result or load_backend_from_args(args)
+    num_layers = backend_num_layers(backend_result)
     cfg = CommonRunConfig(
         prompt=args.prompt,
         model_key=args.model,
@@ -44,26 +48,28 @@ def _run_one(args, seed: int) -> dict:
     )
     diag_cfg = DiagnosticsConfig(
         enabled=True,
-        probe_layers=resolve_probe_layers(args.probe_layers, None),
+        probe_layers=resolve_probe_layers(args.probe_layers, num_layers),
     )
     return run_observe_experiment(
         config=cfg,
         registry_path=args.registry_path,
         runs_dir=args.runs_dir,
         diagnostics_config=diag_cfg,
+        prebuilt_backend=backend_result,
     )
 
 
 def run_from_args(args) -> None:
+    backend_result = load_backend_from_args(args)
     seeds = parse_seeds(getattr(args, "seeds", None))
     if not seeds:
-        _run_one(args, int(args.seed))
+        _run_one(args, int(args.seed), backend_result)
         return
     run_sweep(
         mode="observe",
         seeds=seeds,
         runs_dir=args.runs_dir,
-        run_once=lambda s: _run_one(args, s),
+        run_once=lambda s: _run_one(args, s, backend_result),
         describe={
             "prompt": args.prompt,
             "model": args.model,

@@ -4,7 +4,14 @@ import argparse
 
 from runtime_lab.config.schemas import HysteresisConfig
 from runtime_lab.hysteresis.runner import run_hysteresis_experiment
-from ._common import add_sampling_args, add_seed_sweep_arg, parse_seeds, resolve_semantic_layer
+from ._common import (
+    add_sampling_args,
+    add_seed_sweep_arg,
+    backend_num_layers,
+    load_backend_from_args,
+    parse_seeds,
+    resolve_semantic_layer,
+)
 from ._sweep import run_sweep
 
 
@@ -43,7 +50,9 @@ def add_hysteresis_args(parser: argparse.ArgumentParser) -> None:
     add_seed_sweep_arg(parser)
 
 
-def _run_one(args, seed: int):
+def _run_one(args, seed: int, backend_result=None):
+    backend_result = backend_result or load_backend_from_args(args)
+    num_layers = backend_num_layers(backend_result)
     cfg = HysteresisConfig(
         prompt=args.prompt,
         model_key=args.model,
@@ -53,7 +62,7 @@ def _run_one(args, seed: int):
         nnsight_device=args.nnsight_device,
         seed=seed,
         perturbation_mode=args.perturbation_mode,
-        noise_layer=resolve_semantic_layer(args.noise_layer, None),
+        noise_layer=resolve_semantic_layer(args.noise_layer, num_layers),
         noise_magnitude=args.noise_magnitude,
         noise_start=args.noise_start,
         noise_duration=args.noise_duration,
@@ -66,19 +75,21 @@ def _run_one(args, seed: int):
         config=cfg,
         registry_path=args.registry_path,
         runs_dir=args.runs_dir,
+        prebuilt_backend=backend_result,
     )
 
 
 def run_from_args(args) -> None:
+    backend_result = load_backend_from_args(args)
     seeds = parse_seeds(getattr(args, "seeds", None))
     if not seeds:
-        _run_one(args, int(args.seed))
+        _run_one(args, int(args.seed), backend_result)
         return
     run_sweep(
         mode="hysteresis",
         seeds=seeds,
         runs_dir=args.runs_dir,
-        run_once=lambda s: _run_one(args, s),
+        run_once=lambda s: _run_one(args, s, backend_result),
         describe={
             "prompt": args.prompt,
             "model": args.model,
