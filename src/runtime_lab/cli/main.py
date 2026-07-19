@@ -25,7 +25,10 @@ def main() -> None:
     )
     branchpoints_cli.add_branchpoint_args(branchpoint_parser)
 
-    hysteresis_parser = sub.add_parser("hysteresis", help="BASE -> PERTURB -> REASK protocol")
+    hysteresis_parser = sub.add_parser(
+        "hysteresis",
+        help="Matched clean/perturbed exposure and recovery protocol",
+    )
     hysteresis_cli.add_hysteresis_args(hysteresis_parser)
 
     control_parser = sub.add_parser("control", help="Closed-loop adaptive control run")

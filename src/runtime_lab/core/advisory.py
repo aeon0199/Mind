@@ -178,110 +178,104 @@ def advise_hysteresis(summary: Dict[str, Any]) -> Advisory:
     adv = Advisory()
     metrics = summary.get("metrics") or {}
     cfg = summary.get("config") or {}
-    telemetry = summary.get("telemetry") or {}
+    protocol = summary.get("protocol_validity") or {}
 
-    mode = str(cfg.get("perturbation_mode", "prompt"))
+    mode = str(cfg.get("perturbation_mode", "noise"))
     regime = metrics.get("regime")
-    drift = _safe_float(metrics.get("drift"))
-    hysteresis = _safe_float(metrics.get("hysteresis"))
+    direct_effect = _safe_float(metrics.get("direct_effect_peak"))
+    propagated = _safe_float(metrics.get("propagated_distance"))
+    residual = _safe_float(metrics.get("residual_distance"))
     recovery = _safe_float(metrics.get("recovery"))
-    did_not_propagate = bool(metrics.get("perturbation_did_not_propagate"))
+    did_not_propagate = metrics.get("perturbation_did_not_propagate")
 
     adv.observations.append(
-        f"perturbation_mode={mode} regime={regime} drift={_fmt(drift)} "
-        f"hysteresis={_fmt(hysteresis)} recovery={_fmt(recovery)}"
+        f"protocol={protocol.get('protocol')} mode={mode} regime={regime} "
+        f"direct={_fmt(direct_effect)} propagated={_fmt(propagated)} "
+        f"residual={_fmt(residual)} recovery={_fmt(recovery)}"
     )
 
-    # TD2 / F9: perturbation didn't propagate — recovery is undefined.
-    # This is NOT a regime finding; it's a failed experiment from a
-    # research POV. Tell the LLM to adjust params, not to interpret.
-    if did_not_propagate:
-        adv.flags.append("no-propagation")
+    if not protocol.get("matched_exposure") or not protocol.get("matched_recovery"):
+        adv.flags.append("protocol-invalid")
         adv.observations.append(
-            f"drift={_fmt(drift)} is below the propagation threshold "
-            f"({_fmt(_safe_float(metrics.get('drift_min_threshold')))}) — "
-            "the perturbation did not measurably reach the model's output "
-            "state. Recovery is undefined in this regime."
+            "Exposure or recovery was not fully matched; no recovery regime "
+            "can be interpreted from this run."
         )
-        layer = cfg.get("noise_layer_resolved", cfg.get("noise_layer"))
-        mag = _safe_float(cfg.get("noise_magnitude"))
-        if mode == "noise":
-            adv.next_actions.append({
-                "label": "Raise magnitude — current perturbation was too small",
-                "params": {"noise_magnitude": (mag or 0.3) * 2},
-            })
-            if isinstance(layer, int) and layer not in (-1, 0) and layer < 22:
-                adv.next_actions.append({
-                    "label": "Try the peak-sensitivity layer (E1 found L27 for Qwen3-1.7B)",
-                    "params": {"noise_layer": -1},
-                })
-            adv.next_actions.append({
-                "label": "Longer perturbation window",
-                "params": {"noise_duration": max(16, int(cfg.get("noise_duration", 8)) * 2)},
-            })
+        if protocol.get("eos_truncated_phase"):
+            adv.likely_causes.append(
+                f"EOS truncated the {protocol.get('eos_truncated_phase')} phase."
+            )
+        if not protocol.get("exposure_window_complete"):
+            adv.likely_causes.append(
+                "Exposure ended before a post-intervention endpoint was observed."
+            )
+            adv.next_actions.append(
+                {
+                    "label": "Lengthen exposure beyond the intervention window",
+                    "params": {
+                        "max_tokens": max(
+                            int(cfg.get("exposure_steps", 0)) * 2,
+                            int(cfg.get("noise_start", 1))
+                            + int(cfg.get("noise_duration", 1))
+                            + 1,
+                        )
+                    },
+                }
+            )
         adv.confidence = "high"
         adv.summary_line = _fmt_summary(
-            mode=f"hysteresis:{mode}",
-            leads=["regime=no-propagation", f"drift={_fmt(drift)}"],
+            mode="hysteresis:matched",
+            leads=["regime=invalid"],
             flags=adv.flags,
         )
         return adv
 
-    # Detect a true no-op — base and perturb telemetry identical
-    base = telemetry.get("base") or {}
-    perturb = telemetry.get("perturb") or {}
-    same_hidden = (
-        _safe_float(base.get("hidden_norm")) == _safe_float(perturb.get("hidden_norm"))
-        and _safe_float(base.get("entropy")) == _safe_float(perturb.get("entropy"))
-    )
-
-    if mode == "noise" and same_hidden:
-        adv.flags.append("noise-absorbed")
+    if did_not_propagate is True:
+        adv.flags.append("no-propagation")
         adv.observations.append(
-            "BASE and PERTURB stats are identical — the hidden-state perturbation "
-            "did not propagate into the generated trajectory."
+            f"propagated distance={_fmt(propagated)} is at or below the "
+            f"configured floor ({_fmt(_safe_float(metrics.get('propagation_floor')))})"
+            "; recovery is undefined."
         )
-        layer = int(cfg.get("noise_layer", -1))
         mag = _safe_float(cfg.get("noise_magnitude"))
-        if layer in (-1, -2):
-            adv.likely_causes.append(
-                "noise_layer is near the output; perturbation doesn't cascade through "
-                "subsequent layers and greedy argmax absorbs small shifts."
-            )
-            adv.next_actions.append({
-                "label": "Use a mid-stack noise layer",
-                "params": {"noise_layer": "mid"},
-            })
-        if mag is not None and mag < 0.3:
-            adv.next_actions.append({
-                "label": "Increase noise magnitude",
-                "params": {"noise_magnitude": 0.4},
-            })
-        adv.next_actions.append({
-            "label": "Enable sampling so logit shifts manifest as token shifts",
-            "params": {"temperature": 0.8},
-        })
-
-    if mode == "prompt":
-        adv.observations.append(
-            "Note: 'prompt' mode measures prompt-contamination persistence, not "
-            "internal-dynamics hysteresis. To test internal dynamics, use "
-            "perturbation_mode=noise with a mid-stack layer."
+        adv.next_actions.append(
+            {
+                "label": "Raise magnitude and rerun the matched protocol",
+                "params": {"noise_magnitude": (mag or 0.15) * 2},
+            }
         )
-        adv.flags.append("prompt-contamination-test")
+        adv.next_actions.append(
+            {
+                "label": "Lengthen the exposure window",
+                "params": {
+                    "noise_duration": max(
+                        2,
+                        int(cfg.get("noise_duration", 1)) * 2,
+                    )
+                },
+            }
+        )
+        adv.confidence = "high"
+        adv.summary_line = _fmt_summary(
+            mode="hysteresis:matched",
+            leads=[
+                "regime=no-propagation",
+                f"propagated={_fmt(propagated)}",
+            ],
+            flags=adv.flags,
+        )
+        return adv
 
     if recovery is not None and recovery < -1.0:
         adv.observations.append(
-            f"recovery={recovery:.2f} is strongly negative — REASK state diverged "
-            "further from BASE than PERTURB did. Usually indicates context-persistence "
-            "dominating (KV cache from PERTURB lingers across REASK)."
+            f"recovery={recovery:.2f} is strongly negative: paired separation "
+            "grew during the matched intervention-free recovery window."
         )
 
-    if regime == "elastic" and recovery and recovery > 0.8:
+    if regime == "elastic" and recovery is not None and recovery > 0.8:
         adv.flags.append("good-recovery")
 
     adv.summary_line = _fmt_summary(
-        mode=f"hysteresis:{mode}",
+        mode="hysteresis:matched",
         leads=[f"regime={regime}", f"recovery={_fmt(recovery)}"],
         flags=adv.flags,
     )

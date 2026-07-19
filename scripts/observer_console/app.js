@@ -67,6 +67,13 @@ const COMPARE_PALETTE = [
   '#a3e3ff', '#ffd89c', '#ddd0ff', '#bff4cd', '#ffb4c0',
 ];
 
+const HYSTERESIS_PHASES = [
+  'clean_exposure',
+  'perturbed_exposure',
+  'clean_recovery',
+  'perturbed_recovery',
+];
+
 // ---------------------------------------------------------------------------
 // DOM helpers
 // ---------------------------------------------------------------------------
@@ -125,7 +132,7 @@ function switchMode(mode) {
   state.mode = mode;
   $$('.mode-tab').forEach((el) => el.classList.toggle('is-active', el.dataset.mode === mode));
   $$('.mode-options').forEach((el) => {
-    el.hidden = el.dataset.for !== mode;
+    el.hidden = !el.dataset.for.split(',').includes(mode);
   });
 }
 
@@ -314,10 +321,11 @@ function resetLiveView(job) {
   $('#meta-entropy').textContent = '—';
   $('#meta-hidden').textContent = '—';
   $('#hysteresis-card').hidden = job.mode !== 'hysteresis';
-  ['base', 'perturb', 'reask'].forEach((p) => {
-    $(`#phase-output-${p}`).textContent = '—';
-    $(`#phase-status-${p}`).textContent = 'pending';
-    $(`#phase-status-${p}`).classList.remove('is-done');
+  HYSTERESIS_PHASES.forEach((phase) => {
+    const id = phase.replaceAll('_', '-');
+    $(`#phase-output-${id}`).textContent = '—';
+    $(`#phase-status-${id}`).textContent = 'pending';
+    $(`#phase-status-${id}`).classList.remove('is-done');
   });
   $('#hysteresis-regime').textContent = '—';
 
@@ -400,16 +408,17 @@ function handleTokenEvent(ev) {
   updateStatusUI();
 
   const t = ev.t ?? state.events.length - 1;
-  const div = ev.diagnostics?.divergence;
+  const div = ev.diagnostics?.local_prediction_error ?? ev.diagnostics?.divergence;
   const entropy = ev.diagnostics?.spectral?.spectral_entropy;
   const hiddenNorm = ev.hidden_post_norm ?? ev.hidden_pre_norm;
   const bands = ev.diagnostics?.spectral?.band_fracs || [];
 
   // Token text
-  if (ev.token_text) {
+  const tokenText = ev.consumed_token_text ?? ev.token_text;
+  if (tokenText) {
     const span = document.createElement('span');
     span.className = 'token';
-    span.textContent = ev.token_text;
+    span.textContent = tokenText;
     $('#token-stream').appendChild(span);
     $('#meta-tokens').textContent = `${state.events.length} tokens`;
     const stream = $('#token-stream');
@@ -443,10 +452,11 @@ function handleTokenEvent(ev) {
 }
 
 function handleHysteresisFrame(phase, frame) {
-  $(`#phase-status-${phase}`).textContent = 'done';
-  $(`#phase-status-${phase}`).classList.add('is-done');
+  const id = phase.replaceAll('_', '-');
+  $(`#phase-status-${id}`).textContent = 'done';
+  $(`#phase-status-${id}`).classList.add('is-done');
   const output = frame?.output || frame?.text || '(no output captured)';
-  $(`#phase-output-${phase}`).textContent = output;
+  $(`#phase-output-${id}`).textContent = output;
 }
 
 function handleFinalSummary(summary) {
@@ -456,16 +466,12 @@ function handleFinalSummary(summary) {
     const regime = summary.metrics?.regime;
     if (regime) $('#hysteresis-regime').textContent = `regime: ${regime}`;
 
-    // Populate phase outputs from summary if frames missed.
-    const frames = summary.frames || {};
-    Object.entries(frames).forEach(([phase, f]) => handleHysteresisFrame(phase, f));
-
-    // If we have the run dir, fetch full detail to get output_*.txt
+    // Fetch all four matched trace outputs after the run completes.
     if (state.job.run_id) {
       fetchRunDetail(state.job.run_id).then((detail) => {
         const outs = detail.outputs || {};
         Object.entries(outs).forEach(([phase, txt]) => {
-          if (txt) $(`#phase-output-${phase}`).textContent = txt;
+          if (txt) handleHysteresisFrame(phase, { text: txt });
         });
       }).catch(() => {});
     }
@@ -473,36 +479,27 @@ function handleFinalSummary(summary) {
 }
 
 function renderHysteresisMetricsChart(summary) {
-  const components = summary.metrics?.components || {};
-  const drift = components.drift || {};
-  const hysteresis = components.hysteresis || {};
-
-  const dims = ['hidden', 'entropy', 'logit', 'svd'];
-  const driftVals = dims.map((d) => drift[d] || 0);
-  const hystVals = dims.map((d) => hysteresis[d] || 0);
-
-  const traces = [
-    {
-      x: dims,
-      y: driftVals,
-      name: 'drift',
-      type: 'bar',
-      marker: { color: COLORS.warn },
-      hovertemplate: '%{x} drift: %{y:.3f}<extra></extra>',
-    },
-    {
-      x: dims,
-      y: hystVals,
-      name: 'hysteresis',
-      type: 'bar',
-      marker: { color: COLORS.signal },
-      hovertemplate: '%{x} hysteresis: %{y:.3f}<extra></extra>',
-    },
-  ];
+  const metrics = summary.metrics || {};
+  const exposure = metrics.distance_curve_exposure || [];
+  const recovery = metrics.distance_curve_recovery || [];
+  const traces = [{
+    x: exposure.map((point) => point.global_decision_index),
+    y: exposure.map((point) => point.distance),
+    name: 'exposure distance',
+    type: 'scatter',
+    mode: 'lines+markers',
+    line: { color: COLORS.warn, width: 2 },
+  }, {
+    x: recovery.map((point) => point.global_decision_index),
+    y: recovery.map((point) => point.distance),
+    name: 'recovery distance',
+    type: 'scatter',
+    mode: 'lines+markers',
+    line: { color: COLORS.signal, width: 2 },
+  }];
 
   Plotly.react('chart-hysteresis-metrics', traces, {
     ...BASE_LAYOUT,
-    barmode: 'group',
     showlegend: true,
     legend: { orientation: 'h', x: 0, y: -0.15, font: { color: COLORS.textDim, size: 10 } },
     margin: { t: 10, r: 14, b: 50, l: 44 },
@@ -694,13 +691,9 @@ async function openRunDetail(runId) {
   }
 
   if (mode === 'hysteresis') {
-    body.appendChild(sectionTitle('Drift vs residual hysteresis (per dimension)'));
+    body.appendChild(sectionTitle('Matched exposure and recovery distance'));
     body.appendChild(buildChartDiv('detail-chart-hyst'));
-    if (summary.distribution_shift) {
-      body.appendChild(sectionTitle('Jensen-Shannon divergence (bits)'));
-      body.appendChild(buildChartDiv('detail-chart-js'));
-    }
-    body.appendChild(sectionTitle('Phase outputs'));
+    body.appendChild(sectionTitle('Matched trace outputs'));
     body.appendChild(buildPhaseOutputs(detail.outputs || {}));
 
     setTimeout(() => {
@@ -714,7 +707,7 @@ async function openRunDetail(runId) {
     setTimeout(() => renderControlCharts(detail.events), 40);
   }
 
-  if (mode === 'stress') {
+  if (mode === 'stress' || mode === 'branchpoints') {
     const results = detail.results || {};
     if (Object.keys(results).length) {
       body.appendChild(sectionTitle('Stress results'));
@@ -723,6 +716,14 @@ async function openRunDetail(runId) {
       pre.textContent = JSON.stringify(results.metrics || results, null, 2);
       body.appendChild(pre);
     }
+  }
+
+  if (mode === 'branchpoints' && detail.events) {
+    body.appendChild(sectionTitle('Local counterfactual rows'));
+    const pre = document.createElement('pre');
+    pre.className = 'log-feed';
+    pre.textContent = JSON.stringify(detail.events, null, 2);
+    body.appendChild(pre);
   }
 
   if (detail.output) {
@@ -929,8 +930,9 @@ function buildMetricsRow(mode, summary, detail) {
   if (mode === 'hysteresis') {
     const m = summary.metrics || {};
     tiles.push(['regime', m.regime || '—', m.regime === 'elastic' ? 'good' : 'warn']);
-    tiles.push(['drift', fmtNum(m.drift, 3), 'warn']);
-    tiles.push(['hysteresis', fmtNum(m.hysteresis, 3), 'signal']);
+    tiles.push(['direct peak', fmtNum(m.direct_effect_peak, 3), 'warn']);
+    tiles.push(['propagated', fmtNum(m.propagated_distance, 3), 'signal']);
+    tiles.push(['residual', fmtNum(m.residual_distance, 3), 'signal']);
     tiles.push(['recovery', fmtNum(m.recovery, 3), 'accent']);
   }
 
@@ -945,6 +947,14 @@ function buildMetricsRow(mode, summary, detail) {
     tiles.push(['regime', m.regime || '—', 'warn']);
     tiles.push(['match rate', fmtNum(m.token_match_rate, 3), 'accent']);
     tiles.push(['recovery', fmtNum(m.recovery_ratio, 3)]);
+  }
+
+  if (mode === 'branchpoints') {
+    const m = summary.metrics || {};
+    const validity = summary.protocol_validity || {};
+    tiles.push(['local rows', validity.rows ?? '—', 'accent']);
+    tiles.push(['argmax flip rate', fmtNum(m.argmax_flip_rate, 3), 'warn']);
+    tiles.push(['sampled flip rate', fmtNum(m.sampled_flip_rate, 3), 'signal']);
   }
 
   tiles.forEach(([label, value, cls]) => {
@@ -1185,40 +1195,30 @@ function renderObserveCharts(events) {
 }
 
 function renderHysteresisDetailCharts(summary) {
-  const components = summary.metrics?.components || {};
-  const drift = components.drift || {};
-  const hysteresis = components.hysteresis || {};
-  const dims = ['hidden', 'entropy', 'logit', 'svd'];
+  const metrics = summary.metrics || {};
+  const exposure = metrics.distance_curve_exposure || [];
+  const recovery = metrics.distance_curve_recovery || [];
 
-  Plotly.react('detail-chart-hyst', [
-    {
-      x: dims, y: dims.map((d) => drift[d] || 0),
-      name: 'drift (base→perturb)', type: 'bar',
-      marker: { color: COLORS.warn },
-    },
-    {
-      x: dims, y: dims.map((d) => hysteresis[d] || 0),
-      name: 'residual (base→reask)', type: 'bar',
-      marker: { color: COLORS.signal },
-    },
-  ], {
+  Plotly.react('detail-chart-hyst', [{
+    x: exposure.map((point) => point.global_decision_index),
+    y: exposure.map((point) => point.distance),
+    name: 'exposure distance',
+    type: 'scatter',
+    mode: 'lines+markers',
+    line: { color: COLORS.warn, width: 2 },
+  }, {
+    x: recovery.map((point) => point.global_decision_index),
+    y: recovery.map((point) => point.distance),
+    name: 'recovery distance',
+    type: 'scatter',
+    mode: 'lines+markers',
+    line: { color: COLORS.signal, width: 2 },
+  }], {
     ...BASE_LAYOUT,
-    barmode: 'group',
     showlegend: true,
     legend: { orientation: 'h', x: 0, y: -0.2, font: { color: COLORS.textDim } },
     margin: { t: 10, r: 14, b: 60, l: 44 },
   }, PLOTLY_CONFIG);
-
-  if (summary.distribution_shift) {
-    const js = summary.distribution_shift;
-    Plotly.react('detail-chart-js', [{
-      x: ['base↔perturb', 'base↔reask', 'perturb↔reask'],
-      y: [js.js_base_vs_perturb_ctx, js.js_base_vs_reask_ctx, js.js_perturb_vs_reask_ctx],
-      type: 'bar',
-      marker: { color: [COLORS.phasePerturb, COLORS.accent, COLORS.signal] },
-      hovertemplate: '%{x}: %{y:.3f} bits<extra></extra>',
-    }], { ...BASE_LAYOUT, margin: { t: 10, r: 14, b: 50, l: 52 } }, PLOTLY_CONFIG);
-  }
 }
 
 function renderControlCharts(events) {
@@ -1257,13 +1257,14 @@ function renderControlCharts(events) {
 function buildPhaseOutputs(outputs) {
   const wrap = document.createElement('div');
   wrap.className = 'detail-outputs';
-  ['base', 'perturb', 'reask'].forEach((phase) => {
+  HYSTERESIS_PHASES.forEach((phase) => {
     const box = document.createElement('div');
     box.className = 'detail-output-box';
+    const color = phase.startsWith('clean') ? COLORS.phaseBase : COLORS.phasePerturb;
     box.innerHTML = `
       <div class="detail-output-label" data-phase="${phase}">
-        <span class="phase-dot" style="background: ${phase === 'base' ? COLORS.phaseBase : phase === 'perturb' ? COLORS.phasePerturb : COLORS.phaseReask}"></span>
-        ${phase.toUpperCase()}
+        <span class="phase-dot" style="background: ${color}"></span>
+        ${phase.replaceAll('_', ' ').toUpperCase()}
       </div>
       <pre>${escapeHTML(outputs[phase] || '(not captured)')}</pre>
     `;
@@ -1296,13 +1297,15 @@ function buildPayload() {
   const seedsRaw = $('#f-seeds').value.trim();
   if (seedsRaw) payload.seeds = seedsRaw;
 
-  if (state.mode === 'stress') {
+  if (state.mode === 'stress' || state.mode === 'branchpoints') {
     payload.layer = parseInt($('#f-layer').value, 10);
     payload.intervention_type = $('#f-intervention').value;
     payload.magnitude = parseFloat($('#f-magnitude').value);
     payload.absolute_magnitude = $('#f-absolute-magnitude').checked;
-    payload.start = parseInt($('#f-start').value, 10);
-    payload.duration = parseInt($('#f-duration').value, 10);
+    if (state.mode === 'stress') {
+      payload.start = parseInt($('#f-start').value, 10);
+      payload.duration = parseInt($('#f-duration').value, 10);
+    }
   }
   if (state.mode === 'hysteresis') {
     payload.perturbation_mode = $('#f-perturbation-mode').value;

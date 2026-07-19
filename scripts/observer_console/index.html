@@ -83,11 +83,15 @@
             </button>
             <button type="button" class="mode-tab" data-mode="hysteresis">
               <span class="mode-label">Hysteresis</span>
-              <span class="mode-hint">BASE → PERTURB → REASK</span>
+              <span class="mode-hint">Matched recovery</span>
+            </button>
+            <button type="button" class="mode-tab" data-mode="branchpoints">
+              <span class="mode-label">Branchpoints</span>
+              <span class="mode-hint">Local one-step forks</span>
             </button>
             <button type="button" class="mode-tab" data-mode="stress">
               <span class="mode-label">Stress</span>
-              <span class="mode-hint">Branchpoint A/B</span>
+              <span class="mode-hint">Persistent A/B</span>
             </button>
             <button type="button" class="mode-tab" data-mode="control">
               <span class="mode-label">Control</span>
@@ -126,13 +130,13 @@
 
             <label class="field field-wide">
               <span class="field-label">Prompt</span>
-              <textarea id="f-prompt" rows="3">Explain what a closed-loop controller does.</textarea>
+              <textarea id="f-prompt" rows="3">Explain how airplanes fly in a clear, accurate way.</textarea>
             </label>
           </div>
 
           <!-- Stress-specific -->
-          <div class="mode-options" data-for="stress" hidden>
-            <div class="options-title">Intervention window</div>
+          <div class="mode-options" data-for="stress,branchpoints" hidden>
+            <div class="options-title">Intervention</div>
             <div class="field-grid">
               <label class="field">
                 <span class="field-label">Layer</span>
@@ -298,33 +302,41 @@
 
           <div class="card card-span-4 card-hysteresis" id="hysteresis-card" hidden>
             <div class="card-head">
-              <div class="card-title">Hysteresis phases</div>
+            <div class="card-title">Matched hysteresis traces</div>
               <div class="card-meta" id="hysteresis-regime">—</div>
             </div>
             <div class="hysteresis-grid">
-              <div class="phase-box" data-phase="base">
+              <div class="phase-box" data-phase="clean-exposure">
                 <div class="phase-head">
                   <span class="phase-dot"></span>
-                  <span class="phase-name">BASE</span>
-                  <span class="phase-status" id="phase-status-base">pending</span>
+                  <span class="phase-name">CLEAN EXPOSURE</span>
+                  <span class="phase-status" id="phase-status-clean-exposure">pending</span>
                 </div>
-                <pre class="phase-output" id="phase-output-base">—</pre>
+                <pre class="phase-output" id="phase-output-clean-exposure">—</pre>
               </div>
-              <div class="phase-box" data-phase="perturb">
+              <div class="phase-box" data-phase="perturbed-exposure">
                 <div class="phase-head">
                   <span class="phase-dot"></span>
-                  <span class="phase-name">PERTURB</span>
-                  <span class="phase-status" id="phase-status-perturb">pending</span>
+                  <span class="phase-name">PERTURBED EXPOSURE</span>
+                  <span class="phase-status" id="phase-status-perturbed-exposure">pending</span>
                 </div>
-                <pre class="phase-output" id="phase-output-perturb">—</pre>
+                <pre class="phase-output" id="phase-output-perturbed-exposure">—</pre>
               </div>
-              <div class="phase-box" data-phase="reask">
+              <div class="phase-box" data-phase="clean-recovery">
                 <div class="phase-head">
                   <span class="phase-dot"></span>
-                  <span class="phase-name">REASK</span>
-                  <span class="phase-status" id="phase-status-reask">pending</span>
+                  <span class="phase-name">CLEAN RECOVERY</span>
+                  <span class="phase-status" id="phase-status-clean-recovery">pending</span>
                 </div>
-                <pre class="phase-output" id="phase-output-reask">—</pre>
+                <pre class="phase-output" id="phase-output-clean-recovery">—</pre>
+              </div>
+              <div class="phase-box" data-phase="perturbed-recovery">
+                <div class="phase-head">
+                  <span class="phase-dot"></span>
+                  <span class="phase-name">PERTURBED RECOVERY</span>
+                  <span class="phase-status" id="phase-status-perturbed-recovery">pending</span>
+                </div>
+                <pre class="phase-output" id="phase-output-perturbed-recovery">—</pre>
               </div>
             </div>
             <div class="chart" id="chart-hysteresis-metrics"></div>
@@ -343,6 +355,7 @@
             <div class="archive-filter">
               <button class="filter-chip is-active" data-filter="all">all</button>
               <button class="filter-chip" data-filter="observe">observe</button>
+              <button class="filter-chip" data-filter="branchpoints">branchpoints</button>
               <button class="filter-chip" data-filter="hysteresis">hysteresis</button>
               <button class="filter-chip" data-filter="stress">stress</button>
               <button class="filter-chip" data-filter="control">control</button>

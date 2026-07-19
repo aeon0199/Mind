@@ -83,6 +83,8 @@ def test_zero_perturbation_reports_no_propagation(tmp_path):
         point["distance"] == 0.0
         for point in summary["metrics"]["distance_curve_recovery"]
     )
+    assert "no-propagation" in summary["advisory"]["flags"]
+    assert "REASK" not in json.dumps(summary["advisory"])
 
 
 def test_identical_hidden_vectors_have_exact_zero_distance():

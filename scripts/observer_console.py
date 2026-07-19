@@ -43,7 +43,7 @@ def read_json(path: Path) -> Optional[Dict[str, Any]]:
 
 
 def infer_mode(run_name: str) -> str:
-    for mode in ("observe", "stress", "control", "hysteresis"):
+    for mode in ("observe", "stress", "branchpoints", "hysteresis", "control"):
         if run_name.startswith(f"{mode}_run_"):
             return mode
     if run_name.startswith("sweep_"):
@@ -130,6 +130,13 @@ def summarize_run(run_dir: Path) -> Dict[str, Any]:
             "recovery_ratio": metrics.get("recovery_ratio"),
             "token_match_rate": metrics.get("token_match_rate"),
         })
+    elif mode == "branchpoints":
+        metrics = summary.get("metrics", {}) or {}
+        headline.update({
+            "rows": (summary.get("protocol_validity") or {}).get("rows"),
+            "argmax_flip_rate": metrics.get("argmax_flip_rate"),
+            "sampled_flip_rate": metrics.get("sampled_flip_rate"),
+        })
     elif mode == "control":
         headline.update({
             "avg_raw_div_mean": summary.get("avg_raw_div_mean"),
@@ -198,15 +205,19 @@ def run_detail(run_dir: Path) -> Dict[str, Any]:
         detail["events"] = events
 
     if mode == "hysteresis":
-        detail["frames"] = {
-            "base": read_json(run_dir / "frame_base.json"),
-            "perturb": read_json(run_dir / "frame_perturb.json"),
-            "reask": read_json(run_dir / "frame_reask.json"),
-        }
         detail["outputs"] = {
-            "base": _read_text(run_dir / "output_base.txt"),
-            "perturb": _read_text(run_dir / "output_perturb.txt"),
-            "reask": _read_text(run_dir / "output_reask.txt"),
+            "clean_exposure": _read_text(
+                run_dir / "output_clean_exposure.txt"
+            ),
+            "perturbed_exposure": _read_text(
+                run_dir / "output_perturbed_exposure.txt"
+            ),
+            "clean_recovery": _read_text(
+                run_dir / "output_clean_recovery.txt"
+            ),
+            "perturbed_recovery": _read_text(
+                run_dir / "output_perturbed_recovery.txt"
+            ),
         }
     else:
         detail["output"] = _read_text(run_dir / "output.txt")
@@ -269,7 +280,13 @@ BUS = EventBus()
 def build_cli_command(payload: Dict[str, Any]) -> List[str]:
     """Translate one Console request into the exact current-interpreter CLI."""
     mode = str(payload.get("mode") or "observe")
-    if mode not in ("observe", "stress", "control", "hysteresis"):
+    if mode not in (
+        "observe",
+        "stress",
+        "branchpoints",
+        "hysteresis",
+        "control",
+    ):
         raise ValueError(f"Unknown mode: {mode}")
 
     prompt = str(payload.get("prompt") or "")
@@ -287,7 +304,7 @@ def build_cli_command(payload: Dict[str, Any]) -> List[str]:
     cmd += ["--max-tokens", str(max_tokens), "--seed", str(seed)]
 
     probe_layers = str(payload.get("probe_layers") or "auto")
-    if mode in ("observe", "stress", "control"):
+    if mode in ("observe", "stress", "branchpoints", "control"):
         cmd += ["--probe-layers", probe_layers]
 
     seeds_spec = payload.get("seeds")
@@ -305,14 +322,15 @@ def build_cli_command(payload: Dict[str, Any]) -> List[str]:
         if key in payload and payload[key] is not None:
             cmd.extend([flag, cast(payload[key])])
 
-    if mode == "stress":
+    if mode in ("stress", "branchpoints"):
         _pass("layer", "--layer")
         _pass("intervention_type", "--type")
         _pass("magnitude", "--magnitude", lambda value: str(float(value)))
         if payload.get("absolute_magnitude"):
             cmd.append("--absolute-magnitude")
-        _pass("start", "--start", lambda value: str(int(value)))
-        _pass("duration", "--duration", lambda value: str(int(value)))
+        if mode == "stress":
+            _pass("start", "--start", lambda value: str(int(value)))
+            _pass("duration", "--duration", lambda value: str(int(value)))
     elif mode == "hysteresis":
         perturbation_mode = str(payload.get("perturbation_mode") or "noise")
         cmd += ["--perturbation-mode", perturbation_mode]
@@ -349,7 +367,13 @@ class JobManager:
                 raise RuntimeError("A job is already running.")
 
         mode = str(payload.get("mode") or "observe")
-        if mode not in ("observe", "stress", "control", "hysteresis"):
+        if mode not in (
+            "observe",
+            "stress",
+            "branchpoints",
+            "hysteresis",
+            "control",
+        ):
             raise ValueError(f"Unknown mode: {mode}")
 
         prompt = str(payload.get("prompt") or "")
@@ -556,14 +580,6 @@ class JobManager:
                             except json.JSONDecodeError:
                                 continue
                             BUS.publish("event", ev)
-                # For hysteresis, publish the frames when they appear.
-                if self._job and self._job["mode"] == "hysteresis":
-                    for phase in ("base", "perturb", "reask"):
-                        fp = run_dir / f"frame_{phase}.json"
-                        if fp.exists():
-                            data = read_json(fp)
-                            if data is not None:
-                                BUS.publish("frame", {"phase": phase, "frame": data})
                 return
 
             time.sleep(EVENT_TAIL_POLL_S)
@@ -612,18 +628,40 @@ _MODES_DOC: Dict[str, Dict[str, Any]] = {
             "runaway — suggests checking magnitude / layer choice",
         ],
     },
-    "hysteresis": {
-        "description": "BASE → PERTURB → REASK protocol. Measures whether the model's state returns to baseline after a perturbation is removed.",
+    "branchpoints": {
+        "description": (
+            "Independent local one-step counterfactuals from verified matched "
+            "contexts. The perturbed fork is discarded; only clean generation "
+            "advances."
+        ),
         "useful_for": [
-            "perturbation_mode=prompt: prompt-contamination persistence (legacy — not true internal hysteresis)",
-            "perturbation_mode=noise: real internal-dynamics hysteresis via hidden-state injection at a chosen layer",
+            "Mapping whether an intervention flips the next argmax locally",
+            "Building causal flippability labels without trajectory cascades",
         ],
         "params": {
-            "perturbation_mode": "prompt | noise",
+            "layer": "(str|int) intervention layer",
+            "type": "additive | projection | scaling",
+            "magnitude": "(float) relative by default",
+            "intervention_seed": "(int) perturbation direction seed",
+        },
+    },
+    "hysteresis": {
+        "description": (
+            "matched-exposure-recovery-v2: clean and perturbed branches "
+            "continue under equal instructions, then both recover with no "
+            "intervention."
+        ),
+        "useful_for": [
+            "Separating direct effect, propagation, persistence, and recovery",
+            "Classifying recovery only when both branches remain matched",
+        ],
+        "params": {
+            "perturbation_mode": "noise",
             "noise_layer": "'mid' (default) or int — recommended to stay mid-stack so effect cascades",
-            "noise_magnitude": "float, default 0.3, fraction of hidden norm",
+            "noise_magnitude": "float, default 0.15, fraction of hidden norm",
             "noise_start": "(int) step where noise begins",
             "noise_duration": "(int) how many steps noise is active",
+            "recovery_tokens": "(int) equal intervention-free continuation length",
         },
     },
     "control": {
@@ -648,7 +686,7 @@ def _capabilities_payload() -> Dict[str, Any]:
     return {
         "version": "0.2.0-llm-first",
         "description": (
-            "Observer — closed-loop stability instrumentation for LLM inference. "
+            "Observer — Observe → Perturb → Compare → Prove instrumentation. "
             "This capabilities endpoint is for LLM-driven experiment planning: "
             "fetch it, pick a mode, construct a payload per `params`, POST to /api/launch, "
             "then read /api/runs/<id> to get the summary including `advisory` — a structured "
@@ -674,8 +712,9 @@ def _capabilities_payload() -> Dict[str, Any]:
                 "The next_actions list is designed to be acted on directly: copy the params dict "
                 "into your next POST /api/launch body."
             ),
-            "known_flags": ["no-op", "nominal", "quiet", "volatile", "degenerate", "persistent-effect",
-                            "noise-absorbed", "shadow", "active", "good-recovery", "prompt-contamination-test"],
+            "known_flags": ["no-op", "nominal", "quiet", "volatile", "degenerate",
+                            "persistent-effect", "no-propagation", "protocol-invalid",
+                            "shadow", "active", "good-recovery"],
         },
         "recipes": _RECIPES,
     }
@@ -688,14 +727,25 @@ _RECIPES: Dict[str, Dict[str, Any]] = {
         "payload": {"max_tokens": 8, "prompt": "The sky is"},
     },
     "hysteresis-noise-validate": {
-        "description": "Real hidden-state hysteresis with defaults that actually show effect (mid-stack, magnitude 0.3, sampling on).",
+        "description": "Matched exposure/recovery calibration run; interpret only when propagation and protocol validity pass.",
         "mode": "hysteresis",
         "payload": {
             "perturbation_mode": "noise",
             "noise_layer": "mid",
             "noise_magnitude": 0.3,
             "noise_duration": 8,
+            "recovery_tokens": 32,
             "temperature": 0.8,
+            "max_tokens": 64,
+        },
+    },
+    "local-branchpoint-map": {
+        "description": "Independent same-context one-step counterfactual map.",
+        "mode": "branchpoints",
+        "payload": {
+            "layer": "mid",
+            "intervention_type": "additive",
+            "magnitude": 0.15,
             "max_tokens": 64,
         },
     },

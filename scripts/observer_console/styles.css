@@ -655,7 +655,7 @@ textarea {
 
 .hysteresis-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 
@@ -691,9 +691,8 @@ textarea {
   background: var(--text-muted);
 }
 
-.phase-box[data-phase="base"] .phase-dot { background: var(--phase-base); }
-.phase-box[data-phase="perturb"] .phase-dot { background: var(--phase-perturb); }
-.phase-box[data-phase="reask"] .phase-dot { background: var(--phase-reask); }
+.phase-box[data-phase^="clean-"] .phase-dot { background: var(--phase-base); }
+.phase-box[data-phase^="perturbed-"] .phase-dot { background: var(--phase-perturb); }
 
 .phase-status {
   margin-left: auto;
@@ -984,9 +983,8 @@ textarea {
   gap: 8px;
 }
 
-.detail-output-label[data-phase="base"]    { color: var(--phase-base); }
-.detail-output-label[data-phase="perturb"] { color: var(--phase-perturb); }
-.detail-output-label[data-phase="reask"]   { color: var(--phase-reask); }
+.detail-output-label[data-phase^="clean_"] { color: var(--phase-base); }
+.detail-output-label[data-phase^="perturbed_"] { color: var(--phase-perturb); }
 
 .detail-output-box pre {
   font-size: 11.5px;

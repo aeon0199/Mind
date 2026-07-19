@@ -55,6 +55,33 @@ def test_console_uses_current_python_and_preserves_seed_zero():
     assert command[command.index("--seed") + 1] == "0"
 
 
+def test_daemon_and_console_expose_local_branchpoints():
+    cfg = observer_daemon._build_config_branchpoints(
+        {
+            "prompt": "p",
+            "layer": "mid",
+            "magnitude": 0.2,
+            "seed": 0,
+        },
+        num_layers=6,
+    )
+    command = observer_console.build_cli_command(
+        {
+            "mode": "branchpoints",
+            "prompt": "p",
+            "layer": 2,
+            "magnitude": 0.2,
+            "seed": 0,
+        }
+    )
+
+    assert cfg.intervention_layer == 2
+    assert cfg.intervention_magnitude == 0.2
+    assert cfg.seed == 0
+    assert "branchpoints" in command
+    assert command[command.index("--magnitude") + 1] == "0.2"
+
+
 def test_nnsight_remote_fails_before_loading_with_an_honest_boundary():
     with pytest.raises(RuntimeError, match="trace-based backend"):
         load_model_with_backend(
