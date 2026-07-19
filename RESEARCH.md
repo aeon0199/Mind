@@ -57,21 +57,62 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
   calibration target remains Qwen3-1.7B; cross-model generalization is later.
 - **Foundation contract**: [docs/OBSERVER_FOUNDATIONS.md](docs/OBSERVER_FOUNDATIONS.md).
   Active work follows Observe → Perturb → Compare → Prove. Act is downstream.
-- **Program structure**: three mapping questions, Q1–Q3 in §3. Q1 is reopened
-  and must be answered with independent local branchpoint forks.
+- **Program structure**: three mapping questions, Q1–Q3 in §3. **Q1 status: scoped positive**
+  after independent local branchpoint calibration; Q2 is the active question.
 - **Controller status**: **paused**, not dead. §4 defines the evidence that would bring controller research back to active status.
-- **Instrument status**: foundation mechanics repaired and covered by automated
-  contracts: canonical event semantics, authoritative provenance, loaded-model
-  layer resolution, independent local branchpoints, matched recovery, and
-  diagnostic baselines. Scientific calibration on the target model is next.
-- **Next recommended action**: after the release verification matrix passes,
-  run a small local-branchpoint and matched-hysteresis calibration suite across
-  at least three seeds and two prompts. Include zero and nonzero magnitudes.
-  Analyze only `branchpoint_run_*` artifacts for Q1, grouped by whole run.
+- **Instrument status**: foundation mechanics are repaired and the first
+  42-cell Qwen3-1.7B calibration is complete. All zero controls, context
+  matching, recovery matching, config hashes, and run-directory uniqueness
+  checks passed.
+- **Next recommended action**: begin Q2 with a true per-layer paired-delta
+  propagation instrument. Endpoint hysteresis distances cannot identify where
+  a delta is amplified or absorbed inside the residual stream.
 
 ---
 
 ## 2a. Mapping-program findings
+
+- **F32 — RECALIBRATED** — **Clean pre-intervention features predict local
+  same-context argmax flippability at the calibrated Qwen3-1.7B setting.**
+  M1R ran layer-27 independent one-step forks across 3 seeds × 2 prompts ×
+  magnitudes {0, 0.15, 0.30}, 48 decisions per run, temperature 0.8.
+  - All six zero-magnitude runs were exact no-ops across 282 local decisions.
+  - At magnitude 0.30, sourdough produced 18/141 flips and water cycle 14/141.
+  - Unique leave-one-run-out prompt-slice AUROC was **0.831**
+    (range 0.773–0.886) on sourdough and **0.886** (0.855–0.913) on water
+    cycle. Both clear Q1's prespecified AUROC ≥0.80 stop condition.
+  - Recurring clean predictors were top-1 margin, logit entropy, layer
+    stiffness, and spectral structure.
+  - Fixed-threshold precision/recall remained uneven: 0.233/0.178 on
+    sourdough and 0.689/0.444 on water cycle at magnitude 0.30.
+  - **Verdict:** Q1 has a scoped positive answer for this model, layer,
+    intervention, magnitude, prompts, and seeds. It is not yet a robust
+    controller trigger or a cross-prompt/model universal detector.
+  - Evidence:
+    `docs/FOUNDATION_CALIBRATION_2026-07-19.md` and the durable local artifact
+    directory recorded there.
+  - Confidence: **medium-high** in the scoped AUROC result; only three unique
+    prompt-slice holdouts exist.
+
+- **F33 — MATCHED HYSTERESIS CALIBRATED** — **Propagation is thresholded and
+  strongly trajectory-dependent at Qwen3-1.7B layer 13.** MHR ran the same
+  prompts/seeds at magnitudes {0, 0.10, 0.20, 0.30}, with 20 matched exposure
+  decisions and 16 intervention-free recovery decisions.
+  - All six zero controls had exactly zero initial, propagated, and residual
+    distance. All 24 runs had `matched_recovery=true`.
+  - At magnitude 0.30, propagated endpoint distance ranged from 0.000987 to
+    0.940433 on sourdough but from 0.887970 to 1.305816 on water cycle.
+  - The same intervention magnitude can therefore be nearly absorbed on one
+    sampled trajectory and cause an order-one basin switch on another.
+  - Absolute initial, propagated, and residual distances are primary.
+    Recovery ratios/regime names near tiny absolute distances are not treated
+    as strong scientific categories.
+  - **Verdict:** MHR's validity stop condition is met, but Q2 is not answered.
+    Endpoint distances do not reveal which downstream layer amplifies or
+    absorbs the injected delta, and no bounded-cascade controller layer has
+    been identified.
+  - Confidence: **high** in protocol validity and endpoint measurements;
+    **medium** in the thresholded/basin interpretation.
 
 - **F31 — REOPENED** — **The historical controller-paired AUROCs are invalid
   for the claimed local-flippability question.** The original M1.2 ran 10
@@ -92,9 +133,10 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
   - **What remains useful:** the saved outputs establish that interventions can
     alter continued trajectories, and the AUROCs are a valuable audit example
     of why causal labels need same-context forks.
-  - **Q1 verdict:** **REOPENED.** Rerun with
+  - **Q1 verdict at audit time:** **REOPENED.** Rerun with
     `runtime_lab.cli.main branchpoints`, whole-run splits, clean
     pre-intervention features, and precision/recall as well as AUROC.
+    F32 records the later repaired-protocol recalibration.
   - Confidence in this correction: **high**, from the protocol semantics.
 
 - **F30** — **(historical M1.1 controller-paired analysis; invalidated for
@@ -156,9 +198,11 @@ fit on training runs only. Cross-model generalization is later.
 - It's the direct path back to a smarter controller — predictable branchpoints = designable trigger.
 - Matches where mechanistic interpretability research is going.
 
-**Current status**: **reopened after the 2026-07-19 protocol audit.** The local
-branchpoint runner and corrected analyzer are implemented; the target-model
-calibration suite has not yet been run.
+**Current status**: **scoped positive after M1R/F32.** At relative additive
+magnitude 0.30 and layer 27, both prompt slices clear AUROC 0.80 under unique
+whole-run holdouts. Precision/recall are not robust enough to satisfy the
+controller-return trigger criterion, and broader prompts/seeds/models remain
+open.
 
 ---
 
@@ -175,7 +219,11 @@ calibration suite has not yet been run.
 - If any layer has bounded propagation, that's the principled layer for a future controller.
 - Useful for any hidden-state intervention work (safety, steering, interpretability).
 
-**Current status**: not started. Existing stress runs already have layer_stiffness data at multiple probe layers — partial data available for free.
+**Current status**: **active after MHR/F33.** Matched endpoint measurements now
+show thresholded, seed-dependent propagation, but `layer_stiffness` is a
+within-trajectory velocity diagnostic and cannot reconstruct the paired
+clean-vs-perturbed delta at each downstream layer. Q2 therefore needs an
+explicit per-layer paired-delta trace.
 
 ---
 
@@ -217,22 +265,27 @@ If any two land, a controller redesign experiment is warranted. If none land dur
 
 ## 5. Mapping backlog
 
-Order: complete release verification, then M1R and MHR together. Do not return
-to controller work until the repaired foundation produces calibrated evidence.
+Order: M1R and MHR are complete. Q2 per-layer paired-delta propagation is next.
+Do not return to controller work: only the mapping AUROC stop condition landed;
+the controller-specific precision, bounded-cascade, and directionality
+criteria have not.
 
-### [ ] M1R — Recalibrate local branchpoint flippability
+### [x] M1R — Recalibrate local branchpoint flippability
 
 - **Question**: Can clean pre-intervention features predict a one-step argmax
   flip under an independently forked, same-context additive perturbation?
 - **Design**: at least 3 seeds × 2 prompts × zero/nonzero magnitudes using
   `runtime_lab.cli.main branchpoints`. Analyze only `branchpoint_run_*`
-  artifacts with repeated whole-run splits.
+  artifacts with unique whole-run splits.
 - **Stop condition**: precision ≥0.7 and recall ≥0.5, or AUROC ≥0.8, with
   per-split min/max and both prompt slices reported. Zero magnitude must produce
   no local flips.
-- **Outcome**: _(pending release verification and target-model runs)_
+- **Outcome**: complete 2026-07-19. Magnitude 0.30 cleared mean held-out AUROC
+  0.80 on both prompt slices (0.831 sourdough, 0.886 water cycle). Zero controls
+  were exact. See F32 and
+  `docs/FOUNDATION_CALIBRATION_2026-07-19.md`.
 
-### [ ] MHR — Calibrate matched hysteresis
+### [x] MHR — Calibrate matched hysteresis
 
 - **Question**: After a perturbation propagates beyond its active window, how
   much clean-vs-perturbed separation persists during equal,
@@ -243,7 +296,10 @@ to controller work until the repaired foundation produces calibrated evidence.
 - **Stop condition**: every classified run has
   `matched_recovery=true`; zero magnitude reports no propagation; report direct,
   propagated, and residual distance rather than regime counts alone.
-- **Outcome**: _(pending release verification and target-model runs)_
+- **Outcome**: complete 2026-07-19. All recovery traces matched and zero
+  controls were exact. Nonzero endpoint propagation ranged from near-zero to
+  order-one at the same magnitude, so a bounded layer has not been identified.
+  See F33.
 
 ### [!] Historical M1.1 — Offline analysis from controller runs *(invalid for local Q1)*
 - **Outcome**: the historical analyzer reported cross-model AUROC 0.77 and
@@ -334,6 +390,12 @@ to controller work until the repaired foundation produces calibrated evidence.
   local flippability. Historical perturbation effects remain observations;
   unmatched recovery/regime claims are provisional. Next: verify the release,
   then run M1R + MHR.
+- **2026-07-19 · M1R + MHR calibrated; F32/F33.** Completed 42 Qwen3-1.7B
+  repaired-protocol runs across 3 seeds and 2 prompts. All provenance and zero
+  controls passed. Local flippability cleared AUROC 0.80 on both prompt slices
+  at magnitude 0.30. Matched hysteresis exposed seed-dependent near-zero versus
+  order-one propagation at the same magnitude. Q1 is scoped positive; Q2
+  per-layer paired-delta tracing is next; controller remains paused.
 
 _(For sessions covering the controller arc 2026-02 through 2026-04-19, see [RESEARCH_CONTROLLER.md](RESEARCH_CONTROLLER.md) §5.)_
 

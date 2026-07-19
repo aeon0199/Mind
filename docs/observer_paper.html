@@ -513,6 +513,14 @@
     The current contract is documented in
     <code>docs/OBSERVER_FOUNDATIONS.md</code>.
   </p>
+  <p>
+    The repaired protocols were then calibrated in 42 Qwen3-1.7B runs across
+    three seeds and two prompts. At relative additive magnitude 0.30, unique
+    whole-run prompt-slice AUROC reached 0.831 on sourdough and 0.886 on water
+    cycle. Matched hysteresis showed near-zero and order-one endpoint
+    propagation at the same magnitude on different seeds. These new findings
+    are F32/F33 below; they do not resume the controller.
+  </p>
 </div>
 
 <div class="callout callout-green" style="margin-bottom: 2.5rem;">
@@ -1027,7 +1035,8 @@ Phase 2: <span class="d-warn">MATCHED RECOVERY</span>
   Same requested recovery length, same sampling RNG
 
 Metrics:
-  direct effect = peak paired distance while intervention is active
+  initial intervention distance = first active paired decision
+  active-window peak = largest active paired distance (may include accumulation)
   propagated distance = paired distance after the active window
   residual distance = final paired recovery distance
   recovery = 1 - residual / propagated</pre>
@@ -1528,9 +1537,52 @@ Metrics:
       randomness, discards the perturbed fork, and advances only clean
       generation. The replacement analyzer accepts only those artifacts, splits
       by whole run, fits preprocessing on training runs only, and reports
-      precision/recall beside AUROC. Target-model calibration remains to be run.
+      precision/recall beside AUROC. F32 records the subsequent target-model
+      recalibration.
     </p>
   </div>
+
+  <h3>F32 — RECALIBRATED: local flippability is predictable in scope</h3>
+  <p>
+    The repaired M1R suite ran independent layer-27 one-step forks on
+    Qwen3-1.7B across three seeds, two prompts, and relative additive
+    magnitudes 0, 0.15, and 0.30. All zero controls were exact no-ops. At
+    magnitude 0.30, sourdough produced 18 argmax flips in 141 decisions and
+    water cycle produced 14 in 141.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Prompt</th><th>Unique held-out splits</th><th>AUROC mean</th><th>Range</th><th>Precision</th><th>Recall</th></tr></thead>
+      <tbody>
+        <tr><td>Sourdough</td><td>3</td><td><strong>0.831</strong></td><td>0.773–0.886</td><td>0.233</td><td>0.178</td></tr>
+        <tr><td>Water cycle</td><td>3</td><td><strong>0.886</strong></td><td>0.855–0.913</td><td>0.689</td><td>0.444</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Both prompt slices clear Q1's prespecified AUROC threshold. The recurring
+    clean predictors are top-1 margin, logit entropy, layer stiffness, and
+    spectral structure. This is a scoped positive result, not a universal or
+    controller-ready detector: fixed-threshold precision/recall remain uneven
+    and each prompt has only three unique leave-one-run-out assignments.
+  </p>
+
+  <h3>F33 — Matched hysteresis exposes thresholded propagation</h3>
+  <p>
+    MHR ran 24 matched layer-13 exposure/recovery experiments using the same
+    prompts and seeds at magnitudes 0, 0.10, 0.20, and 0.30. Every recovery
+    pair matched and every zero control remained exactly zero. At magnitude
+    0.30, propagated endpoint distance ranged from 0.000987 to 0.940433 on
+    sourdough and from 0.887970 to 1.305816 on water cycle. The same nominal
+    intervention can therefore be nearly absorbed or trigger an order-one
+    basin switch depending on the sampled trajectory.
+  </p>
+  <p>
+    Absolute initial, propagated, and residual distances are the primary
+    evidence. Endpoint calibration does not identify the downstream layer
+    where amplification occurs, so Q2 per-layer paired-delta tracing is next.
+    No bounded-cascade controller layer has been established.
+  </p>
 </section>
 
 <section>
@@ -1554,7 +1606,7 @@ Metrics:
           <td><strong>Q1</strong></td>
           <td>Branchpoint geometry: when are tokens flippable?</td>
           <td>Independent same-context forks; precision ≥0.7 and recall ≥0.5, or whole-run held-out AUROC ≥0.80, across ≥2 prompts.</td>
-          <td><strong>Reopened (F31 correction)</strong></td>
+          <td><strong>Scoped positive at magnitude 0.30 (F32)</strong></td>
         </tr>
         <tr>
           <td><strong>Q2</strong></td>
@@ -1649,17 +1701,15 @@ Metrics:
     stability needs it to measure).
   </p>
   <p>
-    <strong>Target-model calibration pending.</strong> The mapping program is
-    scoped first to Qwen3-1.7B. Continued additive interventions changed outputs
-    on Qwen3 and TinyLlama, with different consequences, but the repaired local
-    branchpoint protocol has not yet been calibrated on either research model.
-    Cross-model generalization is open.
+    <strong>Target-model calibration is narrow.</strong> F32/F33 cover
+    Qwen3-1.7B, three seeds, two prompts, one branchpoint layer, one hysteresis
+    layer, and the reported magnitudes. Cross-model, broader prompt, and
+    per-layer propagation claims remain open.
   </p>
   <p>
-    <strong>Prompt-class diversity.</strong> The historical F31 analysis used one
-    procedural and one descriptive prompt, but its labels were cascading. Both
-    slices must be rerun with independent same-context forks before any
-    prompt-class geometry claim is restored.
+    <strong>Prompt-class diversity.</strong> The repaired F32 suite reran one
+    procedural and one descriptive prompt with valid local labels, but two
+    prompts are not enough to establish a general prompt-class law.
   </p>
   <p>
     <strong>Sampling.</strong> v1 noted that all generation used greedy argmax. v2

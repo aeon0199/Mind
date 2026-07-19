@@ -82,6 +82,16 @@ Comparisons must match the question being asked.
   exposure endpoint proves propagation above the configured floor and both
   recovery traces remain valid and aligned.
 
+Matched hysteresis keeps two exposure measurements distinct:
+
+- **initial intervention distance** is the first active decision, before an
+  earlier intervention-driven token difference can contaminate the comparison;
+- **active-window peak** is the largest paired distance while intervention is
+  active and can include accumulated trajectory consequences after a flip.
+
+The propagated endpoint and recovery residual are trajectory-level distances,
+not independent local causal effects.
+
 The historical `BASE → PERTURB → REASK` experiment changed the context and
 continued only the perturbed branch. It can preserve useful observations about
 prompt contamination or perturbation effects, but its recovery ratios and

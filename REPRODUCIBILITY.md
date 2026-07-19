@@ -55,10 +55,12 @@ Mode-specific extras:
 - **hysteresis**: `matched-exposure-recovery-v2`. Writes four primary traces:
   `clean_exposure`, `perturbed_exposure`, `clean_recovery`, and
   `perturbed_recovery`, plus aligned distance curves in `summary.json` and
-  `events.jsonl`. Both recovery branches receive no new instruction and no
-  intervention. Legacy `frame_base.json` / `frame_perturb.json` /
-  `frame_reask.json` files are labeled endpoint compatibility views, not metric
-  sources.
+  `events.jsonl`. `initial_intervention_distance` is the first active paired
+  distance; `active_window_peak_distance` may also include accumulated
+  consequences after a prior flip. Both recovery branches receive no new
+  instruction and no intervention. Legacy `frame_base.json` /
+  `frame_perturb.json` / `frame_reask.json` files are labeled endpoint
+  compatibility views, not metric sources.
 - **control**: closed-loop run. Writes `events.jsonl` per token, `summary.json`
   with `status_counts` (WARNING / CRITICAL / COOLDOWN), `avg_raw_div_mean`,
   `avg_score_mean`, and the `advisory` block. This mode is historical/downstream
@@ -72,7 +74,9 @@ Mode-specific extras:
 
 1. For every branchpoint analysis, report total runs, whole-run train/test
    membership, contexts matched, rows, positive labels, AUROC, precision,
-   recall, and min/max across repeated run-grouped splits.
+   recall, and min/max across unique run-grouped splits. When the requested
+   split count exceeds the finite number of unique group assignments, report
+   the smaller honest count rather than weighting duplicate splits.
 2. Fit imputation, scaling, feature filtering, and classifiers using training
    runs only.
 3. When a claim depends on cross-prompt or cross-model generalization, run the

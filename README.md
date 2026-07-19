@@ -35,17 +35,22 @@ This project was built by an independent researcher without formal ML or softwar
 
 ## Current Status
 
-Observer is in a **foundation-first rebuild and calibration phase**. The runtime,
-provenance, local branchpoint, matched-recovery, and diagnostic-baseline
-contracts have been repaired. The historical closed-loop thesis remains paused.
-The next scientific work is a small multi-seed, multi-prompt calibration suite
-using the repaired protocols.
+Observer is in a **foundation-first mapping phase**. The runtime, provenance,
+local branchpoint, matched-recovery, and diagnostic-baseline contracts have
+been repaired, and the first target-model calibration is complete. On
+Qwen3-1.7B, clean features predicted same-context local flips above the
+prespecified AUROC threshold at relative magnitude 0.30 on both prompt slices.
+Matched hysteresis also revealed strongly seed-dependent near-zero versus
+order-one propagation. The historical closed-loop thesis remains paused while
+the project moves to per-layer propagation mapping.
 
 Start with:
 
 - `docs/OBSERVER_FOUNDATIONS.md` for what Observer is and what each result can
   prove.
 - `RESEARCH.md` for the active evidence ledger and next experiment.
+- `docs/FOUNDATION_CALIBRATION_2026-07-19.md` for the first repaired-protocol
+  target-model result.
 - `RESEARCH_CONTROLLER.md` for the archived controller evidence.
 - `docs/RESEARCH_WORKFLOW.md` for the experiment handoff discipline.
 
