@@ -182,7 +182,18 @@ def advise_hysteresis(summary: Dict[str, Any]) -> Advisory:
 
     mode = str(cfg.get("perturbation_mode", "noise"))
     regime = metrics.get("regime")
-    direct_effect = _safe_float(metrics.get("direct_effect_peak"))
+    initial_effect = _safe_float(
+        metrics.get(
+            "initial_intervention_distance",
+            metrics.get("direct_effect_peak"),
+        )
+    )
+    active_peak = _safe_float(
+        metrics.get(
+            "active_window_peak_distance",
+            metrics.get("direct_effect_peak"),
+        )
+    )
     propagated = _safe_float(metrics.get("propagated_distance"))
     residual = _safe_float(metrics.get("residual_distance"))
     recovery = _safe_float(metrics.get("recovery"))
@@ -190,7 +201,8 @@ def advise_hysteresis(summary: Dict[str, Any]) -> Advisory:
 
     adv.observations.append(
         f"protocol={protocol.get('protocol')} mode={mode} regime={regime} "
-        f"direct={_fmt(direct_effect)} propagated={_fmt(propagated)} "
+        f"initial={_fmt(initial_effect)} active_peak={_fmt(active_peak)} "
+        f"propagated={_fmt(propagated)} "
         f"residual={_fmt(residual)} recovery={_fmt(recovery)}"
     )
 

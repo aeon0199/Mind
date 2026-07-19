@@ -465,12 +465,14 @@ def run_hysteresis_experiment(
         if endpoint_valid and exposure_curve
         else None
     )
-    direct_effect_peak = max(
-        (
-            float(point["distance"])
-            for point in exposure_curve
-            if point["intervention_active"]
-        ),
+    active_window = [
+        point for point in exposure_curve if point["intervention_active"]
+    ]
+    initial_intervention_distance = (
+        float(active_window[0]["distance"]) if active_window else 0.0
+    )
+    active_window_peak_distance = max(
+        (float(point["distance"]) for point in active_window),
         default=0.0,
     )
     exposure_peak = max(
@@ -615,7 +617,12 @@ def run_hysteresis_experiment(
         "hysteresis": residual_distance,
         "recovery": recovery,
         "regime": regime,
-        "direct_effect_peak": direct_effect_peak,
+        # Compatibility alias: historical readers called the active-window
+        # peak a "direct" effect even though later active steps can include
+        # accumulated trajectory consequences after an earlier token flip.
+        "direct_effect_peak": active_window_peak_distance,
+        "initial_intervention_distance": initial_intervention_distance,
+        "active_window_peak_distance": active_window_peak_distance,
         "exposure_peak_distance": exposure_peak,
         "propagated_distance": propagated_distance,
         "residual_distance": residual_distance,

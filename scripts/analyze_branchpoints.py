@@ -8,6 +8,7 @@ import json
 import math
 import random
 import string
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Dict, Iterable, Sequence
 
@@ -100,6 +101,8 @@ def load_branchpoint_rows(
     label: str = "argmax_flip",
     model: str | None = None,
     intervention_type: str | None = None,
+    prompt: str | None = None,
+    intervention_magnitude: float | None = None,
 ) -> list[Dict[str, Any]]:
     """Load valid local-fork rows; controller-pair artifacts are never considered."""
     if label not in {"argmax_flip", "sampled_flip"}:
@@ -128,6 +131,19 @@ def load_branchpoint_rows(
             and config.get("intervention_type") != intervention_type
         ):
             continue
+        if prompt is not None and config.get("prompt") != prompt:
+            continue
+        if intervention_magnitude is not None:
+            saved_magnitude = _safe_float(
+                config.get("intervention_magnitude")
+            )
+            if saved_magnitude is None or not math.isclose(
+                saved_magnitude,
+                float(intervention_magnitude),
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            ):
+                continue
 
         for event in _load_jsonl(events_path):
             if event.get("mode") != "branchpoints":
@@ -144,6 +160,10 @@ def load_branchpoint_rows(
                     "features": _clean_features(event),
                     "model": config.get("model"),
                     "intervention_type": config.get("intervention_type"),
+                    "intervention_magnitude": config.get(
+                        "intervention_magnitude"
+                    ),
+                    "prompt": config.get("prompt"),
                 }
             )
     return rows
@@ -286,6 +306,8 @@ def analyze_branchpoint_runs(
     label: str = "argmax_flip",
     model: str | None = None,
     intervention_type: str | None = None,
+    prompt: str | None = None,
+    intervention_magnitude: float | None = None,
     repeats: int = DEFAULT_REPEATS,
     train_frac: float = 0.8,
     seed: int = 42,
@@ -297,6 +319,8 @@ def analyze_branchpoint_runs(
         label=label,
         model=model,
         intervention_type=intervention_type,
+        prompt=prompt,
+        intervention_magnitude=intervention_magnitude,
     )
     run_ids = sorted({str(row["run_id"]) for row in rows})
     if len(run_ids) < int(min_runs):
@@ -337,17 +361,24 @@ def analyze_branchpoint_runs(
     labels = np.asarray([int(row["label"]) for row in rows], dtype=int)
     row_runs = np.asarray([str(row["run_id"]) for row in rows], dtype=object)
 
+    split_at = int(round(len(run_ids) * float(train_frac)))
+    split_at = max(1, min(len(run_ids) - 1, split_at))
+    test_run_count = len(run_ids) - split_at
+    candidate_test_runs = list(combinations(run_ids, test_run_count))
+    random.Random(int(seed)).shuffle(candidate_test_runs)
+
     splits: list[Dict[str, Any]] = []
     weight_vectors: list[np.ndarray] = []
-    attempt = 0
-    max_attempts = max(int(repeats) * 20, 20)
-    while len(splits) < int(repeats) and attempt < max_attempts:
-        train_runs, test_runs = _split_run_ids(
-            run_ids,
-            train_frac=train_frac,
-            seed=int(seed) + attempt,
+    attempted = 0
+    for test_run_tuple in candidate_test_runs:
+        if len(splits) >= int(repeats):
+            break
+        attempted += 1
+        test_run_set = set(test_run_tuple)
+        train_runs = sorted(
+            run_id for run_id in run_ids if run_id not in test_run_set
         )
-        attempt += 1
+        test_runs = sorted(test_run_tuple)
         train_mask = np.isin(row_runs, train_runs)
         test_mask = np.isin(row_runs, test_runs)
         train_labels = labels[train_mask]
@@ -383,10 +414,10 @@ def analyze_branchpoint_runs(
         )
         weight_vectors.append(weights)
 
-    if len(splits) < int(repeats):
+    if not splits:
         raise ValueError(
-            f"Could create only {len(splits)} valid grouped splits out of "
-            f"{repeats} requested"
+            "Could not create a valid unique whole-run split with both label "
+            "classes in train and test"
         )
 
     mean_absolute_weights = np.mean(np.abs(np.stack(weight_vectors)), axis=0)
@@ -412,7 +443,12 @@ def analyze_branchpoint_runs(
         "split_counts": {
             "requested": int(repeats),
             "valid": len(splits),
-            "attempted": attempt,
+            "attempted": attempted,
+            "unique_candidates": len(candidate_test_runs),
+            "exhausted_unique_candidates": bool(
+                len(splits) < int(repeats)
+                and attempted == len(candidate_test_runs)
+            ),
         },
         "splits": splits,
         "aggregate": {
@@ -438,6 +474,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--model", default=None)
     parser.add_argument("--intervention-type", default=None)
+    parser.add_argument("--prompt", default=None)
+    parser.add_argument("--magnitude", type=float, default=None)
     parser.add_argument("--repeats", type=int, default=DEFAULT_REPEATS)
     parser.add_argument("--train-frac", type=float, default=0.8)
     parser.add_argument("--seed", type=int, default=42)
@@ -476,6 +514,8 @@ def main() -> None:
         label=args.label,
         model=args.model,
         intervention_type=args.intervention_type,
+        prompt=args.prompt,
+        intervention_magnitude=args.magnitude,
         repeats=args.repeats,
         train_frac=args.train_frac,
         seed=args.seed,

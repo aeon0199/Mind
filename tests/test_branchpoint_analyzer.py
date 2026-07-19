@@ -10,13 +10,22 @@ def _write_json(path, payload):
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def _write_branchpoint_run(root, name, labels):
+def _write_branchpoint_run(
+    root,
+    name,
+    labels,
+    *,
+    prompt="fixture prompt",
+    magnitude=0.3,
+):
     run_dir = root / name
     run_dir.mkdir()
     config = {
         "mode": "branchpoints",
         "model": "audit-fake",
         "intervention_type": "scaling",
+        "intervention_magnitude": magnitude,
+        "prompt": prompt,
     }
     _write_json(
         run_dir / "config.json",
@@ -102,6 +111,35 @@ def test_analyzer_features_use_only_clean_pre_intervention_fields(tmp_path):
     assert "logit_kl" not in feature_names
 
 
+def test_analyzer_can_filter_prompt_and_magnitude_from_saved_config(tmp_path):
+    _write_branchpoint_run(
+        tmp_path,
+        "branchpoint_run_sourdough",
+        [False, True],
+        prompt="sourdough",
+        magnitude=0.15,
+    )
+    _write_branchpoint_run(
+        tmp_path,
+        "branchpoint_run_water",
+        [True, False],
+        prompt="water",
+        magnitude=0.3,
+    )
+
+    rows = analyze_branchpoints.load_branchpoint_rows(
+        tmp_path,
+        prompt="sourdough",
+        intervention_magnitude=0.15,
+    )
+
+    assert {row["run_id"] for row in rows} == {
+        "branchpoint_run_sourdough"
+    }
+    assert {row["prompt"] for row in rows} == {"sourdough"}
+    assert {row["intervention_magnitude"] for row in rows} == {0.15}
+
+
 def test_evaluation_splits_by_whole_run(tmp_path):
     for index in range(6):
         _write_branchpoint_run(
@@ -126,6 +164,34 @@ def test_evaluation_splits_by_whole_run(tmp_path):
     assert "precision" in result["aggregate"]
     assert "recall" in result["aggregate"]
     assert result["aggregate"]["auroc"]["min"] <= result["aggregate"]["auroc"]["max"]
+
+
+def test_evaluation_never_weights_duplicate_run_splits(tmp_path):
+    for index in range(3):
+        _write_branchpoint_run(
+            tmp_path,
+            f"branchpoint_run_fixture_{index}",
+            [False, True, False, True],
+        )
+
+    result = analyze_branchpoints.analyze_branchpoint_runs(
+        tmp_path,
+        repeats=20,
+        train_frac=0.67,
+        seed=7,
+    )
+    split_signatures = {
+        (
+            tuple(split["train_runs"]),
+            tuple(split["test_runs"]),
+        )
+        for split in result["splits"]
+    }
+
+    assert len(result["splits"]) == 3
+    assert len(split_signatures) == 3
+    assert result["split_counts"]["requested"] == 20
+    assert result["split_counts"]["unique_candidates"] == 3
 
 
 def test_legacy_analyzer_requires_explicit_invalid_label_acknowledgement():

@@ -930,7 +930,16 @@ function buildMetricsRow(mode, summary, detail) {
   if (mode === 'hysteresis') {
     const m = summary.metrics || {};
     tiles.push(['regime', m.regime || '—', m.regime === 'elastic' ? 'good' : 'warn']);
-    tiles.push(['direct peak', fmtNum(m.direct_effect_peak, 3), 'warn']);
+    tiles.push([
+      'initial effect',
+      fmtNum(m.initial_intervention_distance ?? m.direct_effect_peak, 3),
+      'warn',
+    ]);
+    tiles.push([
+      'active peak',
+      fmtNum(m.active_window_peak_distance ?? m.direct_effect_peak, 3),
+      'warn',
+    ]);
     tiles.push(['propagated', fmtNum(m.propagated_distance, 3), 'signal']);
     tiles.push(['residual', fmtNum(m.residual_distance, 3), 'signal']);
     tiles.push(['recovery', fmtNum(m.recovery, 3), 'accent']);

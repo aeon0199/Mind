@@ -87,6 +87,31 @@ def test_zero_perturbation_reports_no_propagation(tmp_path):
     assert "REASK" not in json.dumps(summary["advisory"])
 
 
+def test_hysteresis_separates_initial_effect_from_active_window_peak(tmp_path):
+    config = _config(magnitude=0.5)
+    config.noise_duration = 2
+    summary = run_hysteresis_experiment(
+        config,
+        runs_dir=tmp_path,
+        prebuilt_backend=make_fake_backend(),
+    )
+    active_points = [
+        point
+        for point in summary["metrics"]["distance_curve_exposure"]
+        if point["intervention_active"]
+    ]
+
+    assert summary["metrics"]["initial_intervention_distance"] == (
+        active_points[0]["distance"]
+    )
+    assert summary["metrics"]["active_window_peak_distance"] == max(
+        point["distance"] for point in active_points
+    )
+    assert summary["metrics"]["direct_effect_peak"] == (
+        summary["metrics"]["active_window_peak_distance"]
+    )
+
+
 def test_identical_hidden_vectors_have_exact_zero_distance():
     generator = torch.Generator(device="cpu")
     generator.manual_seed(1)
