@@ -10,7 +10,7 @@ actual token-decision timeline, creates matched counterfactuals, measures what
 changes, and saves enough provenance to challenge every result. `Act`—including
 controller research—comes later.
 
-See [`docs/OBSERVER_FOUNDATIONS.md`](docs/OBSERVER_FOUNDATIONS.md) for the
+See [`docs/foundations/OBSERVER_FOUNDATIONS.md`](docs/foundations/OBSERVER_FOUNDATIONS.md) for the
 scientific and runtime contract.
 
 ## Read The Paper First
@@ -57,19 +57,19 @@ thesis remains paused.
 
 Start with:
 
-- `docs/OBSERVER_FOUNDATIONS.md` for what Observer is and what each result can
+- `docs/foundations/OBSERVER_FOUNDATIONS.md` for what Observer is and what each result can
   prove.
-- `RESEARCH.md` for the active evidence ledger and next experiment.
-- `docs/FOUNDATION_CALIBRATION_2026-07-19.md` for the first repaired-protocol
+- `docs/research/RESEARCH.md` for the active evidence ledger and next experiment.
+- `docs/results/FOUNDATION_CALIBRATION_2026-07-19.md` for the first repaired-protocol
   target-model result.
-- `docs/Q2_PROPAGATION_CALIBRATION_2026-07-19.md` for the downstream-layer
+- `docs/results/Q2_PROPAGATION_CALIBRATION_2026-07-19.md` for the downstream-layer
   propagation result.
-- `docs/Q3_BASIN_MAPPING_2026-07-19.md` for the causal paired-continuation
+- `docs/results/Q3_BASIN_MAPPING_2026-07-19.md` for the causal paired-continuation
   outcome result and negative prediction gate.
-- `docs/Q3_M3R2_REPLICATION_2026-07-19.md` for the fresh-prompt replication,
+- `docs/results/Q3_M3R2_REPLICATION_2026-07-19.md` for the fresh-prompt replication,
   stronger negative Q3 result, and procedural non-replication.
-- `RESEARCH_CONTROLLER.md` for the archived controller evidence.
-- `docs/RESEARCH_WORKFLOW.md` for the experiment handoff discipline.
+- `archive/controller/RESEARCH_CONTROLLER.md` for the archived controller evidence.
+- `docs/workflow/RESEARCH_WORKFLOW.md` for the experiment handoff discipline.
 
 ---
 
@@ -292,29 +292,35 @@ foundation.
   intervention-free branch continuation, and declared branch-blind rubrics
 - Simple diagnostic baselines plus a deterministic synthetic validator
 - Experimental runs reported in the paper were executed on a single NVIDIA H200 GPU via RunPod
-- Reporting checklist in `REPRODUCIBILITY.md`
+- Reporting checklist in `docs/research/REPRODUCIBILITY.md`
 
 ---
 
-## Project Layout
+## Repository Layout
 
-```
-src/runtime_lab/             active implementation and unified CLI
-scripts/                     offline analyzers, warm-model daemon, console
-tests/                       guard tests (CLI parsing, doc/CI hygiene)
-runs/                        local run artifacts (ignored by git)
-docs/                        paper, workflow note, assets
-RESEARCH.md                  active evidence ledger and calibration program
-RESEARCH_CONTROLLER.md       archived controller arc (Phase 1, F1–F29)
-docs/OBSERVER_FOUNDATIONS.md active scientific/runtime contract
-baseline_hysteresis_v1/      legacy v1 hysteresis prototype (historical)
-v1.5/                        legacy v1.5 observability prototype (historical)
-intervention_engine_v1.5_v2/ legacy v2 intervention prototype (historical)
-adaptive_controller_system4/ legacy controller prototype (historical)
+The active implementation is kept separate from experiment tooling, documentation, and historical research. The Python package remains named `runtime_lab` for compatibility.
+
+```text
+observer/
+├── src/runtime_lab/              active measurement package and unified CLI
+├── experiments/                  reusable calibration runners
+├── analysis/                     offline artifact analyzers
+├── tools/                        daemon, validation, and console tooling
+│   └── console/static/           console web assets
+├── tests/                        contract and behavioral tests
+├── docs/
+│   ├── foundations/              active scientific/runtime contract
+│   ├── research/                 active evidence ledger and reproducibility
+│   ├── results/                  dated calibration and replication reports
+│   ├── workflow/                 experiment handoff guidance
+│   └── observer_paper.html       hosted paper source (stable Pages path)
+└── archive/
+    ├── controller/               historical controller arc
+    ├── prototypes/               superseded runtime prototypes
+    └── analysis/                 superseded analyzers
 ```
 
-The `legacy v*` directories are kept for reproducing v1-paper results and as
-historical reference. New work goes in `src/runtime_lab/`.
+New research code belongs in `src/runtime_lab/`, `experiments/`, `analysis/`, or `tools/`. The `archive/` tree is preserved for historical reproduction and context; it is not part of the active evidence pipeline.
 
 ---
 
@@ -335,7 +341,7 @@ Or cite via `CITATION.cff`. The current preprint is the v2 paper at
 [`docs/observer_paper.html`](docs/observer_paper.html) (also hosted at
 <https://aeon0199.github.io/observer/observer_paper.html>). v1 (February 2026,
 "Closed-Loop Stability Control...") is superseded but preserved in git history;
-its central claim was falsified in v2 — see paper §10 and `RESEARCH_CONTROLLER.md`
+its central claim was falsified in v2 — see paper §10 and `archive/controller/RESEARCH_CONTROLLER.md`
 for the full evidence chain.
 
 ---

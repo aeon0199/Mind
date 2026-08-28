@@ -4,7 +4,7 @@
     {
       "name": "Observer Console",
       "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["scripts/observer_console.py", "--no-open", "--port", "8899"],
+      "runtimeArgs": ["tools/console/server.py", "--no-open", "--port", "8899"],
       "port": 8899
     }
   ]

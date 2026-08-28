@@ -19,7 +19,7 @@ jobs:
           python -m pip install -e . pytest
       - name: Compile check
         run: |
-          python -m compileall -q src scripts
+          python -m compileall -q src analysis experiments tools
       - name: Unit tests
         run: |
           python -m pytest -q

@@ -9,7 +9,7 @@ from runtime_lab.config.schemas import HysteresisConfig
 from runtime_lab.core.io.hashing import hash_config
 from runtime_lab.hysteresis.runner import _hidden_distances, run_hysteresis_experiment
 from runtime_lab.cli.hysteresis import add_hysteresis_args
-from scripts import observer_console, observer_daemon
+from tools.console import server as observer_console\nfrom tools import observer_daemon
 from tests.fakes import make_fake_backend
 
 

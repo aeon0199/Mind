@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts import observer_console, observer_daemon
+from tools.console import server as observer_console\nfrom tools import observer_daemon
 from runtime_lab.basins.evaluators import get_prompt_spec
 from runtime_lab.core.backend.loader import load_model_with_backend
 from tests.fakes import make_fake_backend
@@ -119,13 +119,13 @@ def test_daemon_and_console_expose_per_layer_propagation():
 
 def test_console_static_ui_exposes_propagation_mode():
     html = (
-        ROOT / "scripts" / "observer_console" / "index.html"
+        ROOT / "tools" / "console" / "static" / "index.html"
     ).read_text()
     javascript = (
-        ROOT / "scripts" / "observer_console" / "app.js"
+        ROOT / "tools" / "console" / "static" / "app.js"
     ).read_text()
     stylesheet = (
-        ROOT / "scripts" / "observer_console" / "styles.css"
+        ROOT / "tools" / "console" / "static" / "styles.css"
     ).read_text()
 
     assert 'data-mode="propagation"' in html
@@ -219,13 +219,13 @@ def test_daemon_dispatches_basins_with_the_warm_backend(tmp_path):
 
 def test_console_static_ui_exposes_basins_mode():
     html = (
-        ROOT / "scripts" / "observer_console" / "index.html"
+        ROOT / "tools" / "console" / "static" / "index.html"
     ).read_text()
     javascript = (
-        ROOT / "scripts" / "observer_console" / "app.js"
+        ROOT / "tools" / "console" / "static" / "app.js"
     ).read_text()
     stylesheet = (
-        ROOT / "scripts" / "observer_console" / "styles.css"
+        ROOT / "tools" / "console" / "static" / "styles.css"
     ).read_text()
 
     assert 'data-mode="basins"' in html

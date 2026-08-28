@@ -9,7 +9,7 @@ from runtime_lab.cli._common import (
     resolve_probe_layers,
     resolve_semantic_layer,
 )
-from scripts import observer_daemon
+from tools import observer_daemon
 
 
 ROOT = Path(__file__).resolve().parents[1]

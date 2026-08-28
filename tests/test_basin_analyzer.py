@@ -13,7 +13,7 @@ from runtime_lab.basins.replication import (
     M3R2_PREDICTOR_L2_REGULARIZATION,
 )
 from runtime_lab.core.io.hashing import hash_config
-from scripts.analyze_basins import (
+from analysis.analyze_basins import (
     analyze_basin_root,
     render_markdown,
 )

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.analyze_propagation import (
+from analysis.analyze_propagation import (
     aggregate_runs,
     load_propagation_runs,
     render_markdown,
