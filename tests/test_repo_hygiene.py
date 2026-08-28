@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class RepoHygieneTests(unittest.TestCase):
     def test_branchpoint_analyzer_defaults_to_repeated_run_grouped_evaluation(self):
-        from scripts import analyze_branchpoints
+        from analysis import analyze_branchpoints
 
         parser = analyze_branchpoints.build_arg_parser()
         args = parser.parse_args([])

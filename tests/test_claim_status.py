@@ -50,7 +50,7 @@ def test_readme_presents_foundation_before_controller():
 
 def test_archived_claims_are_preserved_with_corrections():
     controller = _read("archive/controller/RESEARCH_CONTROLLER.md")
-    reproducibility = _read("REPRODUCIBILITY.md")
+    reproducibility = _read("docs/research/REPRODUCIBILITY.md")
     paper = _read("docs/observer_paper.html")
 
     assert "FOUNDATION REBUILD CORRECTION" in controller
@@ -121,7 +121,7 @@ def test_public_claim_surfaces_record_m3r2_without_moving_the_gate():
     assert "F36 — M3R-2 PROMPT-BREADTH REPLICATION" in research
     assert "M3R-2 confirmed the negative Q3 gate" in research
     assert "90-run M3R-2 replication" in readme
-    assert "docs/Q3_M3R2_REPLICATION_2026-07-19.md" in readme
+    assert "docs/results/Q3_M3R2_REPLICATION_2026-07-19.md" in readme
     assert "F36 — M3R-2 prompt-breadth replication" in paper
     assert "procedural pattern did not replicate" in paper
     assert "0.596" in readme
