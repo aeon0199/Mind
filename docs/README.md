@@ -10,4 +10,5 @@ This directory contains the current scientific contract, research record, experi
 - `assets/` — paper artwork and other documentation assets.
 
 Historical controller research and superseded implementations live under the repository-level `archive/` directory.
-\nHistorical process plans are preserved under the repository-level `archive/research-plans/` directory.\n
+
+Historical process plans are preserved under the repository-level `archive/research-plans/` directory.

@@ -41,7 +41,7 @@ It covers:
 These match what CI runs:
 
 ```bash
-# Compile-check the active runtime + scripts
+# Compile-check the active runtime and support tools
 python -m compileall -q src analysis experiments tools
 
 # Run the test suite
