@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.run_foundation_calibration import (
+from experiments.run_foundation_calibration import (
     DEFAULT_PROMPTS,
     build_calibration_cells,
     magnitude_slug,

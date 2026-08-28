@@ -3,7 +3,7 @@
 Single-file server built on the stdlib. Streams token-level telemetry
 over Server-Sent Events as runs execute.
 
-    python scripts/observer_console.py [--port 8899]
+    python tools/console/server.py [--port 8899]
 """
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-STATIC_DIR = Path(__file__).resolve().parent / "observer_console"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 RUNS_DIR = REPO_ROOT / "runs"
 REGISTRY_PATH = REPO_ROOT / "models.json"
 

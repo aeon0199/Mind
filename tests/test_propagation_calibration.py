@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from scripts.run_foundation_calibration import DEFAULT_PROMPTS
-from scripts.run_propagation_calibration import (
+from experiments.run_foundation_calibration import DEFAULT_PROMPTS
+from experiments.run_propagation_calibration import (
     build_propagation_cells,
     control_magnitude,
     is_control_cell,

@@ -156,7 +156,7 @@ Every scientific claim should be traceable to evidence that can reject it:
 The diagnostic validator is:
 
 ```bash
-python scripts/validate_diagnostics.py \
+python tools/validate_diagnostics.py \
   --json-out /tmp/observer-diagnostic-validation.json
 ```
 

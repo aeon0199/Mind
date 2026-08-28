@@ -307,15 +307,15 @@ def run_adaptive_controller_system4(
     """
 
     # Locate code modules relative to this file.
-    root = Path(__file__).resolve().parents[1]
-    v2_dir = _resolve_existing_dir(root, ("intervention_engine_v1.5_v2",))
+    root = Path(__file__).resolve().parents[3]
+    v2_dir = _resolve_existing_dir(root, ("archive/prototypes/intervention_engine_v1.5_v2",))
     if str(v2_dir) not in sys.path:
         sys.path.insert(0, str(v2_dir))
 
     v2_backend_path = v2_dir / "backend.py"
     v2_diag_bridge_path = v2_dir / "diagnostics_bridge.py"
     v2_sae_adapter_path = v2_dir / "sae_adapter.py"
-    dashboard_path = root / "adaptive_controller_system4" / "dashboard.py"
+    dashboard_path = root / "archive/controller/adaptive_controller_system4" / "dashboard.py"
 
     v2_backend = _load_module_from_path("adaptive_v2_backend", v2_backend_path)
     v2_diag_bridge = _load_module_from_path("adaptive_v2_diag_bridge", v2_diag_bridge_path)
@@ -709,7 +709,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Adaptive-controller demo: composite diagnostics + pluggable intervention hook")
     parser.add_argument("--prompt", type=str, default="Explain how airplanes fly in a clear, accurate way.")
-    parser.add_argument("--model", type=str, default=None, help="Model key from intervention_engine_v1.5_v2/models.json (or omit for default)")
+    parser.add_argument("--model", type=str, default=None, help="Model key from archive/prototypes/intervention_engine_v1.5_v2/models.json (or omit for default)")
     parser.add_argument("--max-new-tokens", type=int, default=64)
     parser.add_argument("--layer", type=int, default=-1, help="Layer index to hook (negative allowed)")
     parser.add_argument("--ma-window", type=int, default=3, help="Moving average window for controller")

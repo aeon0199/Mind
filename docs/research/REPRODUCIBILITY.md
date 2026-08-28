@@ -180,7 +180,7 @@ Mode-specific extras:
 Before assigning meaning to advanced signals, run:
 
 ```bash
-python scripts/validate_diagnostics.py \
+python tools/validate_diagnostics.py \
   --json-out /tmp/observer-diagnostic-validation.json
 ```
 

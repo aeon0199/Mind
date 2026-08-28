@@ -6,7 +6,7 @@ from runtime_lab.core.diagnostics.baselines import (
     run_baseline_probe,
 )
 from runtime_lab.core.diagnostics.manager import DiagnosticsManager
-from scripts.validate_diagnostics import validate_synthetic_diagnostics
+from tools.validate_diagnostics import validate_synthetic_diagnostics
 
 
 def test_baseline_probe_distinguishes_constant_and_shock_sequences():

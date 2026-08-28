@@ -9,8 +9,8 @@ foundation produces evidence that meets the return criteria.
 
 ## 1. Orient Before Acting
 
-Open [OBSERVER_FOUNDATIONS.md](OBSERVER_FOUNDATIONS.md) and
-[RESEARCH.md](../RESEARCH.md) first.
+Open [OBSERVER_FOUNDATIONS.md](../foundations/OBSERVER_FOUNDATIONS.md) and
+[RESEARCH.md](../research/RESEARCH.md) first.
 
 Read:
 - `§1 Current state`
@@ -54,13 +54,13 @@ If code changes are needed:
 - keep them scoped to one logical change
 - run the proportional unit/contract tests
 - verify they compile before running experiments
-- run `scripts/validate_diagnostics.py` when diagnostic meaning changes
+- run `tools/validate_diagnostics.py` when diagnostic meaning changes
 
 Do not mix exploratory code edits, experiment execution, and interpretation in one sloppy batch.
 
 ## 4. Use the Warm Daemon
 
-For repeated experiments, use `scripts/observer_daemon.py` so the model loads once.
+For repeated experiments, use `tools/observer_daemon.py` so the model loads once.
 
 One gotcha: the daemon redirects `stdout` so JSON acknowledgements are not polluted by runner printouts. If an orchestrator expects human-readable logs on `stdout`, it will get confused. Treat structured daemon responses as the real protocol and read diagnostic noise from `stderr` / saved artifacts instead.
 
@@ -152,7 +152,7 @@ Update:
 - `§4 Backlog`
 - `§5 Sessions log`
 
-The advisory written into each run's `summary.json` is also part of the handoff surface. When a run changes what the next agent should do, make sure the `RESEARCH.md` update and the run advisory tell the same story.
+The advisory written into each run's `summary.json` is also part of the handoff surface. When a run changes what the next agent should do, make sure the `docs/research/RESEARCH.md` update and the run advisory tell the same story.
 
 When adding a finding:
 - give it an `F##`

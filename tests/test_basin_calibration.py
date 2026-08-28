@@ -12,7 +12,7 @@ from runtime_lab.basins.replication import (
     M3R2_PREDICTOR_FEATURES,
     M3R2_PREDICTOR_L2_REGULARIZATION,
 )
-from scripts.run_basin_calibration import (
+from experiments.run_basin_calibration import (
     _build_design,
     _find_completed_summary,
     _run_cell,

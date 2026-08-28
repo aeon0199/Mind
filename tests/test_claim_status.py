@@ -9,7 +9,7 @@ def _read(relative_path):
 
 
 def test_research_preserves_f31_and_records_scoped_q1_recalibration():
-    text = _read("RESEARCH.md")
+    text = _read("docs/research/RESEARCH.md")
 
     assert "F31 — REOPENED" in text
     assert "F32 — RECALIBRATED" in text
@@ -23,7 +23,7 @@ def test_research_preserves_f31_and_records_scoped_q1_recalibration():
 
 
 def test_foundation_contract_defines_causal_event_timeline():
-    text = _read("docs/OBSERVER_FOUNDATIONS.md")
+    text = _read("docs/foundations/OBSERVER_FOUNDATIONS.md")
 
     assert "Observe → Perturb → Compare → Prove" in text
     assert "consumed token" in text
@@ -49,8 +49,8 @@ def test_readme_presents_foundation_before_controller():
 
 
 def test_archived_claims_are_preserved_with_corrections():
-    controller = _read("RESEARCH_CONTROLLER.md")
-    reproducibility = _read("REPRODUCIBILITY.md")
+    controller = _read("archive/controller/RESEARCH_CONTROLLER.md")
+    reproducibility = _read("docs/research/REPRODUCIBILITY.md")
     paper = _read("docs/observer_paper.html")
 
     assert "FOUNDATION REBUILD CORRECTION" in controller
@@ -62,7 +62,7 @@ def test_archived_claims_are_preserved_with_corrections():
 
 
 def test_repository_calibration_report_states_scope_and_controller_boundary():
-    text = _read("docs/FOUNDATION_CALIBRATION_2026-07-19.md")
+    text = _read("docs/results/FOUNDATION_CALIBRATION_2026-07-19.md")
 
     assert "42" in text
     assert "0.831" in text
@@ -71,7 +71,7 @@ def test_repository_calibration_report_states_scope_and_controller_boundary():
 
 
 def test_q2_report_records_validated_scope_and_normalization_result():
-    text = _read("docs/Q2_PROPAGATION_CALIBRATION_2026-07-19.md")
+    text = _read("docs/results/Q2_PROPAGATION_CALIBRATION_2026-07-19.md")
 
     assert "280 runs" in text
     assert "4,200 paired decisions" in text
@@ -81,7 +81,7 @@ def test_q2_report_records_validated_scope_and_normalization_result():
 
 
 def test_q3_report_records_negative_gate_without_erasing_scoped_signal():
-    text = _read("docs/Q3_BASIN_MAPPING_2026-07-19.md")
+    text = _read("docs/results/Q3_BASIN_MAPPING_2026-07-19.md")
 
     assert "60/60" in text
     assert "2,820" in text
@@ -94,7 +94,7 @@ def test_q3_report_records_negative_gate_without_erasing_scoped_signal():
 
 
 def test_m3r2_report_locks_the_negative_replication_and_controller_boundary():
-    text = _read("docs/Q3_M3R2_REPLICATION_2026-07-19.md")
+    text = _read("docs/results/Q3_M3R2_REPLICATION_2026-07-19.md")
 
     assert "90/90" in text
     assert "5,670" in text
@@ -114,14 +114,14 @@ def test_m3r2_report_locks_the_negative_replication_and_controller_boundary():
 
 
 def test_public_claim_surfaces_record_m3r2_without_moving_the_gate():
-    research = _read("RESEARCH.md")
+    research = _read("docs/research/RESEARCH.md")
     readme = _read("README.md")
     paper = _read("docs/observer_paper.html")
 
     assert "F36 — M3R-2 PROMPT-BREADTH REPLICATION" in research
     assert "M3R-2 confirmed the negative Q3 gate" in research
     assert "90-run M3R-2 replication" in readme
-    assert "docs/Q3_M3R2_REPLICATION_2026-07-19.md" in readme
+    assert "docs/results/Q3_M3R2_REPLICATION_2026-07-19.md" in readme
     assert "F36 — M3R-2 prompt-breadth replication" in paper
     assert "procedural pattern did not replicate" in paper
     assert "0.596" in readme
@@ -129,7 +129,7 @@ def test_public_claim_surfaces_record_m3r2_without_moving_the_gate():
 
 
 def test_console_capabilities_describe_active_protocols():
-    text = _read("scripts/observer_console.py")
+    text = _read("tools/console/server.py")
 
     assert '"branchpoints": {' in text
     assert '"propagation": {' in text
