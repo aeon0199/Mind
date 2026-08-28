@@ -1,0 +1,1 @@
+"""Observer web console package."""

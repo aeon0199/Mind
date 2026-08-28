@@ -13,12 +13,12 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from runtime_lab.core.io.hashing import hash_config
 try:
-    from scripts.run_propagation_calibration import (
+    from experiments.run_propagation_calibration import (
         control_magnitude,
         validate_cell_summary,
     )
 except ModuleNotFoundError:
-    from run_propagation_calibration import (
+    from experiments.run_propagation_calibration import (
         control_magnitude,
         validate_cell_summary,
     )
