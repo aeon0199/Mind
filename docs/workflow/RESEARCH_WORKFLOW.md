@@ -152,7 +152,7 @@ Update:
 - `§4 Backlog`
 - `§5 Sessions log`
 
-The advisory written into each run's `summary.json` is also part of the handoff surface. When a run changes what the next agent should do, make sure the `RESEARCH.md` update and the run advisory tell the same story.
+The advisory written into each run's `summary.json` is also part of the handoff surface. When a run changes what the next agent should do, make sure the `docs/research/RESEARCH.md` update and the run advisory tell the same story.
 
 When adding a finding:
 - give it an `F##`
