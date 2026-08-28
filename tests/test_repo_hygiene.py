@@ -28,10 +28,6 @@ class RepoHygieneTests(unittest.TestCase):
         self.assertIn("python -m runtime_lab.cli.main control", readme)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
     def test_repository_layout_separates_active_and_archived_surfaces(self):
         self.assertTrue((ROOT / "analysis").is_dir())
         self.assertTrue((ROOT / "experiments").is_dir())
@@ -45,3 +41,6 @@ if __name__ == "__main__":
         self.assertFalse((ROOT / "baseline_hysteresis_v1").exists())
         self.assertFalse((ROOT / "intervention_engine_v1.5_v2").exists())
         self.assertFalse((ROOT / "v1.5").exists())
+
+if __name__ == "__main__":
+    unittest.main()

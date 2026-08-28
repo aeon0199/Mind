@@ -11,17 +11,18 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Iterable, Mapping, Sequence
 
+import sys
+
 from runtime_lab.core.io.hashing import hash_config
-try:
-    from experiments.run_propagation_calibration import (
-        control_magnitude,
-        validate_cell_summary,
-    )
-except ModuleNotFoundError:
-    from experiments.run_propagation_calibration import (
-        control_magnitude,
-        validate_cell_summary,
-    )
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from experiments.run_propagation_calibration import (
+    control_magnitude,
+    validate_cell_summary,
+)
 
 
 METRICS = (
