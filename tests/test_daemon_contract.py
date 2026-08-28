@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from tools.console import server as observer_console\nfrom tools import observer_daemon
+from tools.console import server as observer_console
+from tools import observer_daemon
 from runtime_lab.basins.evaluators import get_prompt_spec
 from runtime_lab.core.backend.loader import load_model_with_backend
 from tests.fakes import make_fake_backend

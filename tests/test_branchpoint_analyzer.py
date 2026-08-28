@@ -2,7 +2,8 @@ import json
 import sys
 
 import pytest
-from analysis import analyze_branchpoints\nfrom archive.analysis import analyze_branchpoints_legacy
+from analysis import analyze_branchpoints
+from archive.analysis import analyze_branchpoints_legacy
 from runtime_lab.core.io.hashing import hash_config
 
 
