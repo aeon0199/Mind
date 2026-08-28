@@ -24,11 +24,11 @@ def _load_module_from_path(module_name: str, path: Path) -> Any:
 
 
 def _load_v2_module(root: Path):
-    return _load_module_from_path("adaptive_v2_intervention", root / "intervention_engine_v1.5_v2" / "intervention.py")
+    return _load_module_from_path("adaptive_v2_intervention", root / "archive/prototypes/intervention_engine_v1.5_v2" / "intervention.py")
 
 
 def _load_control_module(root: Path):
-    return _load_module_from_path("adaptive_control_loop", root / "adaptive_controller_system4" / "adaptive_loop.py")
+    return _load_module_from_path("adaptive_control_loop", root / "archive/controller/adaptive_controller_system4" / "adaptive_loop.py")
 
 
 def run_observe(args, root: Path):
@@ -120,7 +120,7 @@ def run_control(args, root: Path):
 
 
 def main():
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[3]
 
     parser = argparse.ArgumentParser(description="Adaptive-controller unified runner")
     parser.add_argument("mode", choices=["observe", "stress", "control"])

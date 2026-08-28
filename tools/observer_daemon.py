@@ -13,7 +13,7 @@ Protocol (stdin → stdout):
     callers can read one response per request.
 
 Usage:
-    python scripts/observer_daemon.py --model qwen3-1.7b
+    python tools/observer_daemon.py --model qwen3-1.7b
 
 This is launched from the dashboard's JobManager when warm-daemon mode is
 enabled; stdin is fed JSON line-by-line, stdout is parsed back to pick up
