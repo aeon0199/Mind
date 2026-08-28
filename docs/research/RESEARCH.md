@@ -2,7 +2,7 @@
 
 _Active living document. Observer's current work begins with the repaired
 Observe → Perturb → Compare → Prove foundation. The controller arc is archived
-in [RESEARCH_CONTROLLER.md](RESEARCH_CONTROLLER.md)._
+in [RESEARCH_CONTROLLER.md](../../archive/controller/RESEARCH_CONTROLLER.md)._
 
 Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
 
@@ -28,11 +28,11 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
 
 **Historical context**
 - This doc tracks the mapping program that started 2026-04-19. It is forward-looking by design.
-- For *why* this program exists — the complete controller arc, findings F1–F29, experiments E1–E8.7 — see [RESEARCH_CONTROLLER.md](RESEARCH_CONTROLLER.md).
+- For *why* this program exists — the complete controller arc, findings F1–F29, experiments E1–E8.7 — see [RESEARCH_CONTROLLER.md](../../archive/controller/RESEARCH_CONTROLLER.md).
 - Don't re-run experiments already recorded there. Evidence in the carry-over section below is a summary; the full record is in the archive.
 
 **Discipline**
-- Full protocol: [docs/RESEARCH_WORKFLOW.md](docs/RESEARCH_WORKFLOW.md)
+- Full protocol: [docs/RESEARCH_WORKFLOW.md](../workflow/RESEARCH_WORKFLOW.md)
 - Evidence standard: strong findings need ≥3 seeds AND ≥2 prompts AND ≥2 models. Single-seed or single-model results are labeled as provisional.
 - Before trusting any result, check provenance (config.json, events.jsonl, applied-count).
 - Negative results are progress. Don't retroactively adjust success criteria.
@@ -55,7 +55,7 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
 - **North star**: *Observer maps trajectory sensitivity, propagation,
   persistence, and recovery through matched causal experiments.* The first
   calibration target remains Qwen3-1.7B; cross-model generalization is later.
-- **Foundation contract**: [docs/OBSERVER_FOUNDATIONS.md](docs/OBSERVER_FOUNDATIONS.md).
+- **Foundation contract**: [docs/OBSERVER_FOUNDATIONS.md](../foundations/OBSERVER_FOUNDATIONS.md).
   Active work follows Observe → Perturb → Compare → Prove. Act is downstream.
 - **Program structure**: three mapping questions, Q1–Q3 in §3. **Q1 status: scoped positive**;
   **Q2 status: scoped mechanistic answer**; **Q3 status: measured negative**
@@ -100,7 +100,7 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
   - **Verdict:** M3R-2 confirmed the negative Q3 gate under a broader,
     higher-resolution preregistered design. The controller-return criterion is
     not met, and the controller remains paused.
-  - Evidence: `docs/Q3_M3R2_REPLICATION_2026-07-19.md`.
+  - Evidence: `docs/results/Q3_M3R2_REPLICATION_2026-07-19.md`.
   - Confidence: **high** in causal mechanics, replay, controls, artifacts, and
     the negative result for this frozen design; **low** that a universal
     prompt-class direction exists.
@@ -134,7 +134,7 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
     condition is not met. “Improve” means higher score under a predeclared
     deterministic prompt rubric, not universal semantic quality. The
     controller-return criterion is not met.
-  - Evidence: `docs/Q3_BASIN_MAPPING_2026-07-19.md`.
+  - Evidence: `docs/results/Q3_BASIN_MAPPING_2026-07-19.md`.
   - Confidence: **high** in protocol validity, replay, controls, and recorded
     rubric outcomes; **low-medium** in prompt-class interpretation because the
     eligible binary sample is small and class balance is uneven.
@@ -164,7 +164,7 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
   - **Verdict:** Q2 has a scoped mechanistic answer. Historical F27's “earlier
     layer = worse” is not a universal local law and likely includes repeated
     exposure/context cascade. The Q2 controller-return criterion is not met.
-  - Evidence: `docs/Q2_PROPAGATION_CALIBRATION_2026-07-19.md`.
+  - Evidence: `docs/results/Q2_PROPAGATION_CALIBRATION_2026-07-19.md`.
   - Confidence: **high** in protocol validity and measured curves; **medium**
     in layer-13 candidacy because prompt diversity remains narrow.
 
@@ -185,7 +185,7 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
     intervention, magnitude, prompts, and seeds. It is not yet a robust
     controller trigger or a cross-prompt/model universal detector.
   - Evidence:
-    `docs/FOUNDATION_CALIBRATION_2026-07-19.md` and the durable local artifact
+    `docs/results/FOUNDATION_CALIBRATION_2026-07-19.md` and the durable local artifact
     directory recorded there.
   - Confidence: **medium-high** in the scoped AUROC result; only three unique
     prompt-slice holdouts exist.
@@ -245,12 +245,12 @@ Last updated: **2026-07-19** · Foundation rebuild started: **2026-07-19**
   - **Interpretation**: within Qwen3-1.7B on this prompt, hidden-state geometry features from the clean trajectory predict flippability at 0.82 AUROC. Mechanistically coherent: flippable steps are low-velocity, spectrally-broad-but-low-power, concentrated in a dominant direction, and later in the sequence.
   - **Correction:** shadow features removed direct feature leakage, but did not
     repair the shifted/cascading label. This analysis cannot close Q1.
-  - Artifacts: analyzer at `scripts/analyze_branchpoints.py`, commit `1ec2c14`.
+  - Artifacts: analyzer at `analysis/analyze_branchpoints.py`, commit `1ec2c14`.
   - Confidence: **medium** (1 prompt, 4 seeds, mechanistically consistent features, but prompt-breadth evidence standard not yet met).
 
 ## 2. Carry-over facts (established in controller arc)
 
-_These are motivating evidence for the mapping program. Full records in RESEARCH_CONTROLLER.md §2._
+_These are motivating evidence for the mapping program. Full records in archive/controller/RESEARCH_CONTROLLER.md §2._
 
 - **F13** (cited): reproducible drift operating point at (Qwen3-1.7B, L27, noise_mag=1.0, factual, temp=0.8) — drift 1.96 ± 0.37, DSR=5.36 across 5 seeds. The instrument can produce reproducible perturbation effects.
 - **F17 / F22**: scaling at final layer is absorbed by the model's final RMSNorm. Zero effect on logits. Don't use scaling as an intervention class at L=-1.
@@ -328,7 +328,7 @@ landed.
 
 **The claim we're trying to establish.** Given a token flip at branchpoint T, predict whether the resulting trajectory lands in a better or worse basin. F29 showed this is model-specific; we want to characterize the model-dependent features that determine it.
 
-**Evidence standard** (Qwen3-1.7B scope): ≥5 prompts × ≥3 seeds per (prompt, config) cell, all within Qwen3-1.7B. Cross-model basin comparison is out of scope here (see RESEARCH_CONTROLLER.md F29 for the one cross-model data point we already have, to be revisited later).
+**Evidence standard** (Qwen3-1.7B scope): ≥5 prompts × ≥3 seeds per (prompt, config) cell, all within Qwen3-1.7B. Cross-model basin comparison is out of scope here (see archive/controller/RESEARCH_CONTROLLER.md F29 for the one cross-model data point we already have, to be revisited later).
 
 **Stop condition**: a feature of the pre-flip Qwen3-1.7B generation that predicts improve-vs-degrade with AUROC ≥ 0.7. Candidate features:
 - Baseline output repetition score (is the model in a degenerate loop?)
@@ -362,7 +362,7 @@ The controller thesis is paused, not dead. It returns to active status when **an
 
 If any two land, a controller redesign experiment is warranted. If none land during the mapping program, the interpretability findings stand alone and the controller stays on ice.
 
-**What does NOT justify re-opening controller work**: more tuning of the existing `raw_div → scaling | random additive | EMA opposition` design. That entire search space is exhausted (RESEARCH_CONTROLLER.md F17–F27).
+**What does NOT justify re-opening controller work**: more tuning of the existing `raw_div → scaling | random additive | EMA opposition` design. That entire search space is exhausted (archive/controller/RESEARCH_CONTROLLER.md F17–F27).
 
 ---
 
@@ -387,7 +387,7 @@ expected-improvement criteria have not landed.
 - **Outcome**: complete 2026-07-19. Magnitude 0.30 cleared mean held-out AUROC
   0.80 on both prompt slices (0.831 sourdough, 0.886 water cycle). Zero controls
   were exact. See F32 and
-  `docs/FOUNDATION_CALIBRATION_2026-07-19.md`.
+  `docs/results/FOUNDATION_CALIBRATION_2026-07-19.md`.
 
 ### [x] MHR — Calibrate matched hysteresis
 
@@ -428,7 +428,7 @@ expected-improvement criteria have not landed.
 - **Follow-ups**: _(filled when complete)_
 
 ### [!] Historical M1.2 — Second controller-run prompt *(completed, claim invalidated)*
-- **Outcome**: ran 10 control runs on "Describe the water cycle in a few sentences." with same config as M1.1's passing slice. All active cells fired (8-10 interventions per seed). Rerun of `scripts/analyze_branchpoints.py` on Qwen3-only opposing-anchor corpus:
+- **Outcome**: ran 10 control runs on "Describe the water cycle in a few sentences." with same config as M1.1's passing slice. All active cells fired (8-10 interventions per seed). Rerun of `analysis/analyze_branchpoints.py` on Qwen3-only opposing-anchor corpus:
   - Sourdough: AUROC 0.82 ✓
   - Water cycle: AUROC 0.86 ✓
   - Both prompts clear the 0.80 threshold independently
@@ -443,7 +443,7 @@ expected-improvement criteria have not landed.
 - **Design**:
   - Pick one non-sourdough prompt already in the registry (e.g., "Describe the water cycle in a few sentences." or "Explain how airplanes fly in a clear, accurate way.").
   - Run 5 seeds × 2 cells (shadow + opposing-anchor additive at L=-1, mag=0.3/0.6, temp=0.8, max_tokens=48). 10 runs.
-  - Run `scripts/analyze_branchpoints.py` on the combined corpus (sourdough + new prompt).
+  - Run `analysis/analyze_branchpoints.py` on the combined corpus (sourdough + new prompt).
 - **Stop condition** (Q1 closure): within-Qwen3 held-out AUROC ≥ 0.80 across both prompts.
 - **Historical expected payoff**: this was expected to settle Q1. The
   2026-07-19 audit established that the label did not match the causal question.
@@ -472,7 +472,7 @@ expected-improvement criteria have not landed.
   types and three injection layers, with normalized/angular metrics and prompt
   slices as well as raw L2.
 - **Outcome**: complete 2026-07-19. See F34 and
-  `docs/Q2_PROPAGATION_CALIBRATION_2026-07-19.md`.
+  `docs/results/Q2_PROPAGATION_CALIBRATION_2026-07-19.md`.
 
 ### [x] M3R — Causal prompt-class basin mapping on Qwen3-1.7B
 - **Question**: When an independent branchpoint fork changes a decision and
@@ -497,8 +497,8 @@ expected-improvement criteria have not landed.
   predictor reached mean AUROC 0.571 across five valid splits, below 0.70.
   Procedural prompts produced a scoped 12 improve / 0 degrade / 6 tie pattern
   that was subsequently tested and did not replicate in M3R-2/F36. See F35,
-  F36, `docs/Q3_BASIN_MAPPING_2026-07-19.md`, and
-  `docs/Q3_M3R2_REPLICATION_2026-07-19.md`.
+  F36, `docs/results/Q3_BASIN_MAPPING_2026-07-19.md`, and
+  `docs/results/Q3_M3R2_REPLICATION_2026-07-19.md`.
 
 ### [x] M3R-2 — Fresh-prompt causal basin replication
 
@@ -517,14 +517,14 @@ expected-improvement criteria have not landed.
   Thirteen valid prompt holdouts reached mean AUROC 0.596, below 0.70. The
   procedural slice produced 16 improve / 19 degrade / 9 tie, so the M3R
   directional pattern did not replicate. See F36 and
-  `docs/Q3_M3R2_REPLICATION_2026-07-19.md`.
+  `docs/results/Q3_M3R2_REPLICATION_2026-07-19.md`.
 
 ---
 
 ## 6. Sessions log (Mapping phase)
 
 - **2026-04-19 · Program defined.** Pivoted from controller-focused to mapping-focused. Three questions (Q1 branchpoint geometry, Q2 propagation, Q3 basin structure) with stop conditions. Controller-return criteria specified. Next: M1.1.
-- **2026-04-19 · M1.1 ran, Qwen3 AUROC 0.82.** Codex wrote `scripts/analyze_branchpoints.py`. Claude caught + fixed a circular-feature leak (features from active events included intervention_applied, scale_used, etc. — tautological). With honest shadow-trajectory features on the Qwen3-1.7B sourdough slice, held-out AUROC is **0.82** across 12 pairs / 4 seeds — clears Q1's 0.80 threshold. F30 added. Remaining Q1 gap: ≥2 prompts evidence standard. M1.2 queued: run a second Qwen3 prompt suite.
+- **2026-04-19 · M1.1 ran, Qwen3 AUROC 0.82.** Codex wrote `analysis/analyze_branchpoints.py`. Claude caught + fixed a circular-feature leak (features from active events included intervention_applied, scale_used, etc. — tautological). With honest shadow-trajectory features on the Qwen3-1.7B sourdough slice, held-out AUROC is **0.82** across 12 pairs / 4 seeds — clears Q1's 0.80 threshold. F30 added. Remaining Q1 gap: ≥2 prompts evidence standard. M1.2 queued: run a second Qwen3 prompt suite.
 - **2026-04-19 · Scope correction.** Human redirected: mapping program is Qwen3-1.7B, not cross-model. Earlier M1.2 spec (add logit-margin logging for cross-model generalization) deferred to M1.3 / later work. Current M1.2 is a simple 10-run experiment on a second Qwen3 prompt.
 - **2026-04-19 · Historical M1.2 verdict (invalidated 2026-07-19).** Ten
   water-cycle controller runs produced historical AUROCs of 0.82 and 0.86 and
@@ -567,7 +567,7 @@ expected-improvement criteria have not landed.
   became 16 / 19 / 9 on fresh prompts. The negative Q3 result is replicated;
   controller work remains paused.
 
-_(For sessions covering the controller arc 2026-02 through 2026-04-19, see [RESEARCH_CONTROLLER.md](RESEARCH_CONTROLLER.md) §5.)_
+_(For sessions covering the controller arc 2026-02 through 2026-04-19, see [RESEARCH_CONTROLLER.md](../../archive/controller/RESEARCH_CONTROLLER.md) §5.)_
 
 ---
 
@@ -576,7 +576,7 @@ _(For sessions covering the controller arc 2026-02 through 2026-04-19, see [RESE
 **Orient before starting**
 ```bash
 # see the status of both docs
-head -40 RESEARCH.md RESEARCH_CONTROLLER.md
+head -40 docs/research/RESEARCH.md archive/controller/RESEARCH_CONTROLLER.md
 
 # current state via API
 curl -s http://127.0.0.1:8899/api/capabilities | jq '.modes | keys'
@@ -587,7 +587,7 @@ curl -s http://127.0.0.1:8899/api/runs | jq '.runs[0:5] | .[] | {id, mode, headl
 ```bash
 cd ~/observer
 source .venv/bin/activate
-python scripts/observer_daemon.py --model qwen3-1.7b
+python tools/observer_daemon.py --model qwen3-1.7b
 ```
 
 **Orchestrator pattern for a new mapping experiment**

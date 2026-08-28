@@ -511,7 +511,7 @@
     observations, but its recovery ratios and regime labels are provisional.
     The historical numbers below are retained as an audit record, not erased.
     The current contract is documented in
-    <code>docs/OBSERVER_FOUNDATIONS.md</code>.
+    <code>docs/foundations/OBSERVER_FOUNDATIONS.md</code>.
   </p>
   <p>
     The repaired protocols were then calibrated in 42 Qwen3-1.7B runs across
@@ -1261,7 +1261,7 @@ Metrics:
       consistent with two alternative explanations we could not rule out at the time:
       Qwen2.5-specific scaling behavior, and prompt-seed-specific basin topology
       independent of the controller. The v1 results are preserved in the repository's
-      <code>RESEARCH_CONTROLLER.md</code> archive for historical context.
+      <code>archive/controller/RESEARCH_CONTROLLER.md</code> archive for historical context.
     </p>
     <p>
       In v2 we ran a longer arc on Qwen3-1.7B (28 layers) with explicit controls. We
@@ -1768,7 +1768,7 @@ Metrics:
     <code>(scaling | additive-random | additive-EMA-opposing | additive-anchor-opposing)</code>
     × <code>(L=−1, L=−2, L=−3)</code> × <code>(magnitude ∈ {0.3, 0.6, 0.8, 1.2})</code>
     have all been tested and are recorded in §10 and the
-    <code>RESEARCH_CONTROLLER.md</code> archive. Reopening this space without new
+    <code>archive/controller/RESEARCH_CONTROLLER.md</code> archive. Reopening this space without new
     information from the mapping work would be blind tuning.
   </p>
 </section>
@@ -1789,7 +1789,7 @@ Metrics:
     artifacts.
   </p>
   <p>
-    The included <code>REPRODUCIBILITY.md</code> specifies a reporting checklist for public claims: 
+    The included <code>docs/research/REPRODUCIBILITY.md</code> specifies a reporting checklist for public claims: 
     pin commit hash in every figure caption; report model key, backend, seed, and intervention settings; 
     run at least 3 seeds per comparison; report mean + confidence interval, not best run; 
     publish raw <code>results.json</code> used for plots. This is the standard that is routinely 
@@ -1801,10 +1801,10 @@ Metrics:
     installation, event semantics, provenance, semantic layer resolution,
     same-context local forks, matched recovery, run-grouped analysis, and
     synthetic diagnostic validation. The repository keeps two top-level research documents:
-    <code>RESEARCH.md</code> tracks the active mapping program and is the entry point
-    for any new session, and <code>RESEARCH_CONTROLLER.md</code> archives the
+    <code>docs/research/RESEARCH.md</code> tracks the active mapping program and is the entry point
+    for any new session, and <code>archive/controller/RESEARCH_CONTROLLER.md</code> archives the
     completed controller arc with full F-numbered findings so subsequent agents can
-    cite established facts without re-deriving them. <code>docs/RESEARCH_WORKFLOW.md</code>
+    cite established facts without re-deriving them. <code>docs/workflow/RESEARCH_WORKFLOW.md</code>
     documents the experiment handoff protocol both documents follow.
   </p>
 </section>
@@ -2005,8 +2005,8 @@ Metrics:
     implemented against artifacts that were jointly reviewed before being treated
     as evidence. All code, runs, and claims were human-reviewed against generated
     artifacts. The complete F-numbered evidence chain (F1–F36) is preserved in
-    <code>RESEARCH_CONTROLLER.md</code>, <code>RESEARCH.md</code>, and
-    <code>docs/OBSERVER_FOUNDATIONS.md</code> in the
+    <code>archive/controller/RESEARCH_CONTROLLER.md</code>, <code>docs/research/RESEARCH.md</code>, and
+    <code>docs/foundations/OBSERVER_FOUNDATIONS.md</code> in the
     repository, with full per-experiment run identifiers so any claim in this paper
     can be traced to its underlying run artifacts.
   </p>

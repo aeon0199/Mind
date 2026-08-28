@@ -270,8 +270,8 @@ The controller-return program still lacks two qualifying results:
 - Generated analysis: `BASIN_ANALYSIS.md`
 - Independent reanalysis:
   `/tmp/observer-m3r2-analysis-independent.json`
-- Frozen runner: `scripts/run_basin_calibration.py`
-- Frozen analyzer: `scripts/analyze_basins.py`
+- Frozen runner: `experiments/run_basin_calibration.py`
+- Frozen analyzer: `analysis/analyze_basins.py`
 
 The independent analyzer rerun matched the durable analysis exactly after
 removing only `generated_at`.

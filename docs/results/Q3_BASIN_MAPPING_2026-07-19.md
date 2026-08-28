@@ -197,5 +197,5 @@ replication rather than controller work:
 - Manifest: `basin_manifest.json`
 - Machine-readable analysis: `basin_analysis.json`
 - Generated analysis table: `BASIN_ANALYSIS.md`
-- Reproducible runner: `scripts/run_basin_calibration.py`
-- Independent analyzer: `scripts/analyze_basins.py`
+- Reproducible runner: `experiments/run_basin_calibration.py`
+- Independent analyzer: `analysis/analyze_basins.py`
